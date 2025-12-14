@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'dart:io';
-
 import 'package:faker/faker.dart' as fk;
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../data/account_model.dart';
 import '../data/account_repository.dart';
@@ -714,6 +714,7 @@ class _AvatarPicker extends StatefulWidget {
 class _AvatarPickerState extends State<_AvatarPicker> {
   String? _path;
   final TextEditingController _manualPathController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -730,12 +731,39 @@ class _AvatarPickerState extends State<_AvatarPicker> {
 
   Future<void> _pick() async {
     try {
-      final typeGroup = XTypeGroup(label: 'images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']);
-      final file = await openFile(acceptedTypeGroups: [typeGroup]);
-      if (file != null && file.path.isNotEmpty) {
-        _setPath(file.path);
+      // Debug log start
+      // ignore: avoid_print
+      print('尝试打开图库选择头像...');
+      final XFile? picked = await _imagePicker.pickImage(source: ImageSource.gallery);
+      if (picked != null && picked.path.isNotEmpty) {
+        final bytes = await picked.readAsBytes();
+        final supportDir = await getApplicationSupportDirectory();
+        final avatarDir = Directory(p.join(supportDir.path, 'avatars'));
+        if (!avatarDir.existsSync()) {
+          avatarDir.createSync(recursive: true);
+        }
+        final targetPath = p.join(avatarDir.path, p.basename(picked.path));
+        await File(targetPath).writeAsBytes(bytes, flush: true);
+        if (mounted) {
+          setState(() {
+            _path = targetPath;
+            _manualPathController.text = targetPath;
+          });
+        }
+        widget.onPicked(targetPath);
+        return;
       }
-    } catch (e) {
+      // ignore: avoid_print
+      print('未选择文件（可能用户取消）');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未选择文件')),
+        );
+      }
+    } catch (e, st) {
+      // Debug print to console when picker fails.
+      // ignore: avoid_print
+      print('头像选择失败: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('选择图片失败: $e')),
@@ -793,21 +821,32 @@ class _AvatarPickerState extends State<_AvatarPicker> {
     );
   }
 
-  void _setPath(String? path) {
+  Future<void> _setPath(String? path) async {
     if (path == null || path.isEmpty) return;
-    final file = File(path);
-    if (!file.existsSync()) {
+    try {
+      final bytes = await File(path).readAsBytes();
+      final supportDir = await getApplicationSupportDirectory();
+      final avatarDir = Directory(p.join(supportDir.path, 'avatars'));
+      if (!avatarDir.existsSync()) {
+        avatarDir.createSync(recursive: true);
+      }
+      final targetPath = p.join(avatarDir.path, p.basename(path));
+      await File(targetPath).writeAsBytes(bytes, flush: true);
+      if (mounted) {
+        setState(() {
+          _path = targetPath;
+          _manualPathController.text = targetPath;
+        });
+      }
+      widget.onPicked(targetPath);
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('文件不存在，请确认路径')),
+          SnackBar(
+            content: Text('无法读取/保存头像，请使用“选择图片”按钮并允许访问照片或选择其他目录：$e'),
+          ),
         );
       }
-      return;
     }
-    setState(() {
-      _path = path;
-      _manualPathController.text = path;
-    });
-    widget.onPicked(path);
   }
 }

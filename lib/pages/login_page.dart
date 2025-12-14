@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/account_model.dart';
 import '../data/account_repository.dart';
@@ -29,11 +30,18 @@ class _LoginPageState extends State<LoginPage> {
   String _captchaText = _generateCaptcha();
   bool _loading = false;
   String? _error;
+  bool _rememberMe = true;
 
   static String _generateCaptcha() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rand = Random();
     return List.generate(5, (_) => chars[rand.nextInt(chars.length)]).join();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRemembered();
   }
 
   void _refreshCaptcha() {
@@ -69,6 +77,7 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
     setState(() => _loading = false);
+    await _persistRemembered();
     widget.onLoggedIn(account.username);
   }
 
@@ -168,10 +177,23 @@ class _LoginPageState extends State<LoginPage> {
                                 height: 16,
                                 width: 16,
                                 child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.login),
-                        label: const Text('登录'),
+                          )
+                        : const Icon(Icons.login),
+                    label: const Text('登录'),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      value: _rememberMe,
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() => _rememberMe = v);
+                        }
+                      },
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('记住账号和密码（仅本机存储）'),
                     ),
                   ],
                 ),
@@ -189,6 +211,40 @@ class _LoginPageState extends State<LoginPage> {
     _passController.dispose();
     _captchaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadRemembered() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final remember = prefs.getBool('remember_flag') ?? true;
+      final user = prefs.getString('remember_user');
+      final pass = prefs.getString('remember_pass');
+      if (!mounted) return;
+      setState(() {
+        _rememberMe = remember;
+        if (user != null) _userController.text = user;
+        if (pass != null) _passController.text = pass;
+      });
+    } catch (_) {
+      // Ignore persistence errors on desktop; fall back to manual input.
+    }
+  }
+
+  Future<void> _persistRemembered() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString('remember_user', _userController.text.trim());
+        await prefs.setString('remember_pass', _passController.text);
+        await prefs.setBool('remember_flag', true);
+      } else {
+        await prefs.remove('remember_user');
+        await prefs.remove('remember_pass');
+        await prefs.setBool('remember_flag', false);
+      }
+    } catch (_) {
+      // Ignore persistence errors; do not block login.
+    }
   }
 }
 
