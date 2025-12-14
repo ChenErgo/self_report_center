@@ -1,31 +1,31 @@
-import 'report_database.dart';
+import 'app_database.dart';
 import 'report_model.dart';
 
 class ReportRepository {
-  ReportRepository(this.database);
+  ReportRepository(this.db);
 
-  final ReportDatabase database;
+  final AppDatabase db;
 
   Future<List<ReportRecord>> fetch({
     String query = '',
     String? category,
   }) {
-    return database.fetchAll(query: query, category: category);
+    return db.fetchReports(query: query, category: category);
   }
 
   Future<void> deleteMany(Set<int> ids) async {
-    await database.deleteByIds(ids.toList());
+    await db.deleteReportsByIds(ids.toList());
   }
 
   Future<void> deleteOne(int id) async {
-    await database.deleteByIds([id]);
+    await db.deleteReportsByIds([id]);
   }
 
   Future<int> create(ReportRecord record) {
-    return database.insert(record);
+    return db.insertReport(record);
   }
 
   Future<void> update(ReportRecord record) {
-    return database.update(record);
+    return db.updateReport(record);
   }
 }
