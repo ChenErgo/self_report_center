@@ -1,4 +1,5 @@
 import 'package:bcrypt/bcrypt.dart';
+import 'role_model.dart';
 
 class AccountRecord {
   AccountRecord({
@@ -8,6 +9,7 @@ class AccountRecord {
     required this.role,
     required this.status,
     required this.avatarPath,
+    this.roles = const [],
     required this.createdAt,
   });
 
@@ -17,6 +19,7 @@ class AccountRecord {
   final String role;
   final String status;
   final String? avatarPath;
+  final List<RoleRecord> roles;
   final String createdAt;
 
   Map<String, Object?> toMap() {
@@ -27,6 +30,7 @@ class AccountRecord {
       'role': role,
       'status': status,
       'avatarPath': avatarPath,
+      // roles stored via account_roles table
       'createdAt': createdAt,
     };
   }
@@ -39,6 +43,7 @@ class AccountRecord {
       role: (map['role'] ?? '') as String,
       status: (map['status'] ?? '') as String,
       avatarPath: map['avatarPath'] as String?,
+      roles: const [],
       createdAt: (map['createdAt'] ?? '') as String,
     );
   }
@@ -50,6 +55,7 @@ class AccountRecord {
     String? role,
     String? status,
     String? avatarPath,
+    List<RoleRecord>? roles,
     String? createdAt,
   }) {
     return AccountRecord(
@@ -59,6 +65,7 @@ class AccountRecord {
       role: role ?? this.role,
       status: status ?? this.status,
       avatarPath: avatarPath ?? this.avatarPath,
+      roles: roles ?? this.roles,
       createdAt: createdAt ?? this.createdAt,
     );
   }

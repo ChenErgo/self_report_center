@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'data/account_repository.dart';
 import 'data/report_repository.dart';
+import 'data/role_repository.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/login_page.dart';
 
@@ -11,10 +12,12 @@ class AdminApp extends StatelessWidget {
     super.key,
     required this.reportRepository,
     required this.accountRepository,
+    required this.roleRepository,
   });
 
   final ReportRepository reportRepository;
   final AccountRepository accountRepository;
+  final RoleRepository roleRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +61,7 @@ class AdminApp extends StatelessWidget {
       home: _RootShell(
         reportRepository: reportRepository,
         accountRepository: accountRepository,
+        roleRepository: roleRepository,
       ),
     );
   }
@@ -67,10 +71,12 @@ class _RootShell extends StatefulWidget {
   const _RootShell({
     required this.reportRepository,
     required this.accountRepository,
+    required this.roleRepository,
   });
 
   final ReportRepository reportRepository;
   final AccountRepository accountRepository;
+  final RoleRepository roleRepository;
 
   @override
   State<_RootShell> createState() => _RootShellState();
@@ -96,6 +102,7 @@ class _RootShellState extends State<_RootShell> {
     return DashboardPage(
       reportRepository: widget.reportRepository,
       accountRepository: widget.accountRepository,
+      roleRepository: widget.roleRepository,
       currentUsername: _loggedInUser!,
       onLogout: () => setState(() => _loggedInUser = null),
     );

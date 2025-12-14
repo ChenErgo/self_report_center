@@ -52,6 +52,7 @@ class AccountTable extends StatelessWidget {
         DataColumn2(label: Text('头像'), fixedWidth: 72),
         DataColumn2(label: Text('账号'), size: ColumnSize.L),
         DataColumn2(label: Text('角色')),
+        DataColumn2(label: Text('角色列表'), size: ColumnSize.L),
         DataColumn2(label: Text('状态')),
         DataColumn2(label: Text('创建时间'), size: ColumnSize.M),
         DataColumn2(label: Text('操作'), fixedWidth: 120),
@@ -106,6 +107,7 @@ class _AccountTableSource extends DataTableSource {
         ),
         DataCell(Text(record.username)),
         DataCell(Text(record.role)),
+        DataCell(Text(record.roles.map((e) => e.name).join(', '))),
         DataCell(
           Switch.adaptive(
             value: record.status == 'active',

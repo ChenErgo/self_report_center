@@ -6,24 +6,30 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../constants/menu_keys.dart';
 import '../data/account_model.dart';
 import '../data/account_repository.dart';
 import '../data/report_model.dart';
 import '../data/report_repository.dart';
+import '../data/role_model.dart';
+import '../data/role_repository.dart';
 import '../widgets/account_table.dart';
 import '../widgets/report_table.dart';
+import '../widgets/role_table.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
     super.key,
     required this.reportRepository,
     required this.accountRepository,
+    required this.roleRepository,
     required this.currentUsername,
     required this.onLogout,
   });
 
   final ReportRepository reportRepository;
   final AccountRepository accountRepository;
+  final RoleRepository roleRepository;
   final String currentUsername;
   final VoidCallback onLogout;
 
@@ -45,36 +51,44 @@ class _DashboardPageState extends State<DashboardPage> {
   String? _selectedCategory;
   String _selectedMenuLabel = '数据概览';
   bool _accountView = false;
+  bool _roleView = false;
+  bool _isSuperAdmin = false;
+  Set<String> _currentPermissions = {};
   List<ReportRecord> _records = [];
   List<AccountRecord> _accounts = [];
+  List<RoleRecord> _roles = [];
+  List<RoleRecord> _roleRecords = [];
+  final Set<int> _selectedRoleIds = {};
 
   final List<MenuEntry> _menuEntries = [
     MenuEntry(
       label: '报表中心',
       icon: Icons.analytics,
+      permissionKey: 'data_overview',
       children: [
-        MenuEntry(label: '数据概览', icon: Icons.folder, category: null),
-        MenuEntry(label: '销售报表', icon: Icons.table_view, category: '销售'),
-        MenuEntry(label: '运营报表', icon: Icons.stacked_bar_chart, category: '运营'),
-        MenuEntry(label: '财务报表', icon: Icons.receipt_long, category: '财务'),
+        MenuEntry(label: '数据概览', icon: Icons.folder, category: null, permissionKey: 'data_overview'),
+        MenuEntry(label: '销售报表', icon: Icons.table_view, category: '销售', permissionKey: 'sales_report'),
+        MenuEntry(label: '运营报表', icon: Icons.stacked_bar_chart, category: '运营', permissionKey: 'ops_report'),
+        MenuEntry(label: '财务报表', icon: Icons.receipt_long, category: '财务', permissionKey: 'finance_report'),
       ],
     ),
     MenuEntry(
       label: '系统设置',
       icon: Icons.settings,
       children: [
-        MenuEntry(label: '权限', icon: Icons.person),
-        MenuEntry(label: '安全策略', icon: Icons.security),
-        MenuEntry(label: '备份恢复', icon: Icons.backup),
-        MenuEntry(label: '账号管理', icon: Icons.admin_panel_settings, isAccount: true),
+        MenuEntry(label: '权限', icon: Icons.person, permissionKey: 'settings_permission'),
+        MenuEntry(label: '安全策略', icon: Icons.security, permissionKey: 'settings_security'),
+        MenuEntry(label: '备份恢复', icon: Icons.backup, permissionKey: 'settings_backup'),
+        MenuEntry(label: '账号管理', icon: Icons.admin_panel_settings, isAccount: true, permissionKey: 'account_manage'),
+        MenuEntry(label: '角色管理', icon: Icons.supervisor_account, isRole: true, permissionKey: 'role_manage'),
       ],
     ),
     MenuEntry(
       label: '开发工具',
       icon: Icons.developer_board,
       children: [
-        MenuEntry(label: 'API 网关', icon: Icons.web),
-        MenuEntry(label: '调试', icon: Icons.bug_report),
+        MenuEntry(label: 'API 网关', icon: Icons.web, permissionKey: 'dev_api'),
+        MenuEntry(label: '调试', icon: Icons.bug_report, permissionKey: 'dev_debug'),
       ],
     ),
   ];
@@ -82,11 +96,21 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    _refreshData();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    await _loadRolesAndPermissions();
+    await _refreshData();
   }
 
   Future<void> _refreshData() async {
     setState(() => _loading = true);
+    if (_roleView) {
+      await _refreshRoles();
+      setState(() => _loading = false);
+      return;
+    }
     if (_accountView) {
       final accounts = await widget.accountRepository.fetchAll(query: _accountSearchTerm);
       setState(() {
@@ -105,6 +129,36 @@ class _DashboardPageState extends State<DashboardPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _refreshRoles() async {
+    final roles = await widget.roleRepository.fetchAll();
+    setState(() {
+      _roleRecords = roles;
+      _roles = roles;
+      _selectedRoleIds.clear();
+    });
+  }
+
+  Future<void> _loadRolesAndPermissions() async {
+    final roles = await widget.roleRepository.fetchAll();
+    final acct = await widget.accountRepository.findDetailByUsername(widget.currentUsername);
+    final perms = <String>{};
+    bool superAdmin = false;
+    if (acct != null && acct.roles.isNotEmpty) {
+      for (final r in acct.roles) {
+        perms.addAll(r.permissions);
+        if (r.name == 'super_admin') superAdmin = true;
+      }
+    } else {
+      // 没有角色时默认全开，避免锁死
+      perms.addAll(kMenuPermissions.map((e) => e.key));
+    }
+    setState(() {
+      _roles = roles;
+      _isSuperAdmin = superAdmin;
+      _currentPermissions = perms;
+    });
   }
 
   Future<void> _handleDeleteSingle(ReportRecord record) async {
@@ -185,7 +239,8 @@ class _DashboardPageState extends State<DashboardPage> {
         );
         return;
       }
-      await widget.accountRepository.create(record);
+      final roleIds = record.roles.where((r) => r.id != null).map((r) => r.id!).toList();
+      await widget.accountRepository.create(record, roleIds: roleIds);
       await _refreshData();
     }
   }
@@ -194,7 +249,8 @@ class _DashboardPageState extends State<DashboardPage> {
     if (record.username == 'superchenergou') return;
     final updated = await _openAccountDialog(existing: record);
     if (updated != null) {
-      await widget.accountRepository.update(updated);
+      final roleIds = updated.roles.where((r) => r.id != null).map((r) => r.id!).toList();
+      await widget.accountRepository.update(updated.copyWith(id: record.id), roleIds: roleIds);
       await _refreshData();
     }
   }
@@ -204,6 +260,136 @@ class _DashboardPageState extends State<DashboardPage> {
     final updated = record.copyWith(status: active ? 'active' : 'disabled');
     await widget.accountRepository.update(updated);
     await _refreshData();
+  }
+
+  Future<void> _handleRoleAdd() async {
+    final role = await _openRoleDialog();
+    if (role != null) {
+      await widget.roleRepository.create(role);
+      await _loadRolesAndPermissions();
+      await _refreshData();
+    }
+  }
+
+  Future<void> _handleRoleEdit(RoleRecord role) async {
+    if (role.name == 'super_admin') return;
+    final updated = await _openRoleDialog(existing: role);
+    if (updated != null) {
+      await widget.roleRepository.update(updated.copyWith(id: role.id));
+      await _loadRolesAndPermissions();
+      await _refreshData();
+    }
+  }
+
+  Future<void> _handleRoleDeleteSelected() async {
+    if (_selectedRoleIds.isEmpty) return;
+    final toDelete = _roleRecords.where((r) => r.id != null && _selectedRoleIds.contains(r.id) && r.name != 'super_admin').toList();
+    for (final r in toDelete) {
+      await widget.roleRepository.delete(r.id!);
+    }
+    await _loadRolesAndPermissions();
+    await _refreshData();
+  }
+
+  Future<void> _handleRoleDelete(RoleRecord role) async {
+    if (role.name == 'super_admin' || role.id == null) return;
+    await widget.roleRepository.delete(role.id!);
+    await _loadRolesAndPermissions();
+    await _refreshData();
+  }
+
+  Future<RoleRecord?> _openRoleDialog({RoleRecord? existing}) {
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    final descController = TextEditingController(text: existing?.description ?? '');
+    final selectedPerms = <String>{...?(existing?.permissions)};
+
+    return showDialog<RoleRecord>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (innerCtx, setStateDialog) {
+            return AlertDialog(
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              title: Text(existing == null ? '新增角色' : '编辑角色'),
+              content: SizedBox(
+                width: 460,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        readOnly: existing?.name == 'super_admin',
+                        decoration: const InputDecoration(
+                          labelText: '角色名称',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.zero),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: descController,
+                        decoration: const InputDecoration(
+                          labelText: '描述',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.zero),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('菜单权限'),
+                      Column(
+                        children: kMenuPermissions.map((perm) {
+                          final checked = selectedPerms.contains(perm.key);
+                          return CheckboxListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            value: checked,
+                            title: Text(perm.label),
+                            onChanged: existing?.name == 'super_admin'
+                                ? null
+                                : (val) {
+                                    if (val == null) return;
+                                    setStateDialog(() {
+                                      if (val) {
+                                        selectedPerms.add(perm.key);
+                                      } else {
+                                        selectedPerms.remove(perm.key);
+                                      }
+                                    });
+                                  },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isEmpty) return;
+                    Navigator.of(dialogCtx).pop(
+                      RoleRecord(
+                        id: existing?.id,
+                        name: nameController.text.trim(),
+                        description: descController.text.trim(),
+                        permissions: selectedPerms.toList(),
+                      ),
+                    );
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<ReportRecord?> _openEditDialog(ReportRecord record, {bool isNew = false}) {
@@ -280,6 +466,7 @@ class _DashboardPageState extends State<DashboardPage> {
       _selectedCategory = entry.category;
       _selectedMenuLabel = entry.label;
       _accountView = entry.isAccount;
+      _roleView = entry.isRole;
     });
     _refreshData();
   }
@@ -292,6 +479,9 @@ class _DashboardPageState extends State<DashboardPage> {
     final isSuper = existing?.username == 'superchenergou';
     final createdAt = existing?.createdAt ?? DateTime.now().toIso8601String();
     String? avatarPath = existing?.avatarPath;
+    final selectedRoleIds = <int>{
+      ...existing?.roles.where((r) => r.id != null).map((r) => r.id!) ?? {},
+    };
 
     return showDialog<AccountRecord>(
       context: context,
@@ -329,6 +519,29 @@ class _DashboardPageState extends State<DashboardPage> {
                             avatarPath = path;
                           });
                         },
+                      ),
+                      const SizedBox(height: 8),
+                      const Align(alignment: Alignment.centerLeft, child: Text('选择角色（可多选）')),
+                      Column(
+                        children: _roles.map((r) {
+                          final checked = selectedRoleIds.contains(r.id);
+                          return CheckboxListTile(
+                            value: checked,
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(r.name),
+                            onChanged: (val) {
+                              if (r.id == null || val == null) return;
+                              setStateDialog(() {
+                                if (val) {
+                                  selectedRoleIds.add(r.id!);
+                                } else {
+                                  selectedRoleIds.remove(r.id!);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
                       ),
                       SwitchListTile(
                         title: const Text('状态（启用/禁用）'),
@@ -372,7 +585,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       avatarPath: avatarPath,
                       createdAt: createdAt,
                     );
-                    Navigator.of(context).pop(record);
+                    Navigator.of(context).pop(record.copyWith(roles: _roles.where((r) => selectedRoleIds.contains(r.id)).toList()));
                   },
                   child: const Text('保存'),
                 ),
@@ -421,7 +634,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '当前模块：$_selectedMenuLabel（${_accountView ? _accounts.length : _records.length} 条记录）',
+                                          '当前模块：$_selectedMenuLabel（${_roleView ? _roleRecords.length : _accountView ? _accounts.length : _records.length} 条记录）',
                                           style: const TextStyle(fontWeight: FontWeight.bold),
                                         ),
                                         const SizedBox(height: 8),
@@ -441,10 +654,32 @@ class _DashboardPageState extends State<DashboardPage> {
                                                   onDelete: _handleAccountDelete,
                                                   onStatusChange: _handleAccountStatusChange,
                                                 )
-                                              : ReportTable(
-                                                  records: _records,
-                                                  rowsPerPage: _rowsPerPage,
-                                                  onRowsPerPageChanged: (value) {
+                                              : _roleView
+                                                  ? RoleTable(
+                                                      roles: _roleRecords,
+                                                      rowsPerPage: _rowsPerPage,
+                                                      onRowsPerPageChanged: (value) {
+                                                        if (value != null) {
+                                                          setState(() => _rowsPerPage = value);
+                                                        }
+                                                      },
+                                                      selectedIds: _selectedRoleIds,
+                                                      onSelectChange: (id, sel) {
+                                                        setState(() {
+                                                          if (sel) {
+                                                            _selectedRoleIds.add(id);
+                                                          } else {
+                                                            _selectedRoleIds.remove(id);
+                                                          }
+                                                        });
+                                                      },
+                                                      onEdit: _handleRoleEdit,
+                                                      onDelete: _handleRoleDelete,
+                                                    )
+                                                  : ReportTable(
+                                                      records: _records,
+                                                      rowsPerPage: _rowsPerPage,
+                                                      onRowsPerPageChanged: (value) {
                                                     if (value != null) {
                                                       setState(() => _rowsPerPage = value);
                                                     }
@@ -519,6 +754,12 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  bool _canAccess(MenuEntry entry) {
+    if (_isSuperAdmin) return true;
+    if (entry.permissionKey == null) return true;
+    return _currentPermissions.contains(entry.permissionKey);
+  }
+
   Widget _buildSideMenu() {
     return Container(
       width: 260,
@@ -531,20 +772,26 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Text('导航', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
           ..._menuEntries.map(
-            (entry) => ExpansionTile(
-              leading: Icon(entry.icon),
-              title: Text(entry.label),
-              children: entry.children
-                  .map(
-                    (child) => ListTile(
-                      leading: Icon(child.icon, size: 20),
-                      title: Text(child.label),
-                      selected: _selectedMenuLabel == child.label,
-                      onTap: () => _handleMenuTap(child),
-                    ),
-                  )
-                  .toList(),
-            ),
+            (entry) {
+              final visibleChildren = entry.children.where(_canAccess).toList();
+              if (!_canAccess(entry) && visibleChildren.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return ExpansionTile(
+                leading: Icon(entry.icon),
+                title: Text(entry.label),
+                children: visibleChildren
+                    .map(
+                      (child) => ListTile(
+                        leading: Icon(child.icon, size: 20),
+                        title: Text(child.label),
+                        selected: _selectedMenuLabel == child.label,
+                        onTap: () => _handleMenuTap(child),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
           ),
         ],
       ),
@@ -552,6 +799,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildToolbar() {
+    if (_roleView) {
+      return _buildRoleToolbar();
+    }
     if (_accountView) {
       return _buildAccountToolbar();
     }
@@ -640,6 +890,29 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildRoleToolbar() {
+    return Row(
+      children: [
+        FilledButton.icon(
+          onPressed: _handleRoleAdd,
+          icon: const Icon(Icons.add),
+          label: const Text('新增角色'),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          onPressed: _selectedRoleIds.isEmpty ? null : _handleRoleDeleteSelected,
+          icon: const Icon(Icons.delete_outline),
+          label: Text('删除选中 (${_selectedRoleIds.length})'),
+        ),
+        const Spacer(),
+        Text(
+          '分页：每页 $_rowsPerPage 条 | 共 ${_roleRecords.length} 条',
+          style: const TextStyle(color: Colors.black54),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFooter() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -666,6 +939,8 @@ class MenuEntry {
     required this.icon,
     this.category,
     this.isAccount = false,
+    this.isRole = false,
+    this.permissionKey,
     this.children = const [],
   });
 
@@ -673,6 +948,8 @@ class MenuEntry {
   final IconData icon;
   final String? category;
   final bool isAccount;
+  final bool isRole;
+  final String? permissionKey;
   final List<MenuEntry> children;
 }
 
@@ -849,4 +1126,3 @@ class _AvatarPickerState extends State<_AvatarPicker> {
       }
     }
   }
-}
