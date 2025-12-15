@@ -974,6 +974,16 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             child: Row(
               children: [
+                TextButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.notifications_none, size: 18),
+                  label: const Text('消息中心'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: _accentColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 _buildUserAvatar(),
                 const SizedBox(width: 10),
                 Column(
@@ -989,8 +999,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 const SizedBox(width: 12),
                 TextButton.icon(
                   onPressed: widget.onLogout,
-                  icon: const Icon(Icons.logout, size: 18),
-                  label: const Text('退出'),
+                  icon: const Icon(Icons.logout, size: 18, color: Colors.red),
+                  label: const Text('退出', style: TextStyle(color: Colors.red)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
                 ),
               ],
             ),
