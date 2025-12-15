@@ -1319,6 +1319,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildTabs() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.only(left: 8),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -1329,7 +1330,7 @@ class _DashboardPageState extends State<DashboardPage> {
               decoration: BoxDecoration(
                 color: isActive ? Colors.white : Colors.grey.shade100,
                 border: Border.all(color: isActive ? _accentColor : Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.zero,
               ),
               child: Row(
                 children: [
