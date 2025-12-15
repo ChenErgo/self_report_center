@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:data_table_2/data_table_2.dart';
 import 'package:flutter/material.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../data/account_model.dart';
 
@@ -29,122 +29,165 @@ class AccountTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = _AccountTableSource(
-      accounts: accounts,
-      selectedIds: selectedIds,
-      onEdit: onEdit,
-      onDelete: onDelete,
-      onSelectChanged: onSelectChange,
-      onStatusChange: onStatusChange,
-    );
+    final tableData = accounts
+        .map(
+          (record) => {
+            'id': record.id,
+            'username': record.username,
+            'role': record.role,
+            'roleNames': record.roles.map((e) => e.name).join(', '),
+            'statusText': record.status == 'active' ? '启用' : '禁用',
+            'createdAt': record.createdAt.split('T').first,
+          },
+        )
+        .toList();
+    final theme = TDTheme.of(context);
+    final tableHeight = (rowsPerPage * 68).toDouble();
+    final tableWidth = MediaQuery.of(context).size.width;
 
-    return PaginatedDataTable2(
-      columnSpacing: 12,
-      horizontalMargin: 12,
-      headingRowHeight: 44,
-      dataRowHeight: 56,
-      minWidth: 900,
-      showCheckboxColumn: true,
-      rowsPerPage: rowsPerPage,
-      availableRowsPerPage: const [10, 20, 30],
-      onRowsPerPageChanged: onRowsPerPageChanged,
-      columns: const [
-        DataColumn2(label: Text('头像'), fixedWidth: 72),
-        DataColumn2(label: Text('账号'), size: ColumnSize.L),
-        DataColumn2(label: Text('角色')),
-        DataColumn2(label: Text('角色列表'), size: ColumnSize.L),
-        DataColumn2(label: Text('状态')),
-        DataColumn2(label: Text('创建时间'), size: ColumnSize.M),
-        DataColumn2(label: Text('操作'), fixedWidth: 120),
+    return TDTable(
+      bordered: true,
+      stripe: true,
+      rowHeight: 48,
+      height: tableHeight,
+      width: tableWidth,
+      backgroundColor: TDTheme.of(context).bgColorContainer,
+      columns: [
+        TDTableCol(
+          selection: true,
+          width: 56,
+          selectable: (index, row) {
+            if (index < 0 || index >= accounts.length) return false;
+            final record = accounts[index];
+            return record.id != null && record.username != 'superchenergou';
+          },
+          checked: (index, row) {
+            if (index < 0 || index >= accounts.length) return false;
+            final id = accounts[index].id;
+            if (id == null) return false;
+            return selectedIds.contains(id);
+          },
+        ),
+        TDTableCol(
+          title: '头像',
+          colKey: 'avatar',
+          width: 88,
+          cellBuilder: (_, index) {
+            if (index < 0 || index >= accounts.length) {
+              return const SizedBox.shrink();
+            }
+            final record = accounts[index];
+            final hasAvatar = record.avatarPath != null &&
+                record.avatarPath!.isNotEmpty &&
+                File(record.avatarPath!).existsSync();
+            return Container(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 44,
+                height: 44,
+                color: Colors.grey.shade200,
+                child: hasAvatar
+                    ? Image.file(File(record.avatarPath!), fit: BoxFit.cover)
+                    : const Icon(Icons.person, size: 22, color: Colors.grey),
+              ),
+            );
+          },
+        ),
+        TDTableCol(title: '账号', colKey: 'username', ellipsis: true, width: 160),
+        TDTableCol(title: '角色', colKey: 'role', ellipsis: true, width: 120),
+        TDTableCol(
+          title: '角色列表',
+          colKey: 'roleNames',
+          ellipsis: true,
+          width: 260,
+        ),
+        TDTableCol(
+          title: '状态',
+          colKey: 'statusText',
+          width: 160,
+          cellBuilder: (_, index) {
+            if (index < 0 || index >= accounts.length) {
+              return const SizedBox.shrink();
+            }
+            final record = accounts[index];
+            final disabled = record.username == 'superchenergou';
+            final active = record.status == 'active';
+            return Row(
+              children: [
+                TDSwitch(
+                  isOn: active,
+                  enable: !disabled,
+                  size: TDSwitchSize.small,
+                  onChanged: (value) {
+                    onStatusChange(record, value);
+                    return false;
+                  },
+                ),
+                const SizedBox(width: 8),
+                TDText(
+                  active ? '启用' : '禁用',
+                  textColor: disabled ? theme.textDisabledColor : theme.textColorPrimary,
+                ),
+              ],
+            );
+          },
+        ),
+        TDTableCol(title: '创建时间', colKey: 'createdAt', width: 140),
+        TDTableCol(
+          title: '操作',
+          colKey: 'actions',
+          width: 180,
+          fixed: TDTableColFixed.right,
+          cellBuilder: (_, index) {
+            if (index < 0 || index >= accounts.length) {
+              return const SizedBox.shrink();
+            }
+            final record = accounts[index];
+            final isSuper = record.username == 'superchenergou';
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: isSuper ? null : () => onEdit(record),
+                  child: TDText(
+                    '编辑',
+                    style: TextStyle(
+                      color: isSuper ? theme.textDisabledColor : theme.brandNormalColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: isSuper ? null : () => onDelete(record),
+                  child: TDText(
+                    '删除',
+                    style: TextStyle(
+                      color: isSuper ? theme.textDisabledColor : theme.errorColor6,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ],
-      source: source,
-    );
-  }
-}
-
-class _AccountTableSource extends DataTableSource {
-  _AccountTableSource({
-    required this.accounts,
-    required this.selectedIds,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onSelectChanged,
-    required this.onStatusChange,
-  });
-
-  final List<AccountRecord> accounts;
-  final Set<int> selectedIds;
-  final void Function(AccountRecord record) onEdit;
-  final void Function(AccountRecord record) onDelete;
-  final void Function(int id, bool selected) onSelectChanged;
-  final void Function(AccountRecord record, bool active) onStatusChange;
-
-  @override
-  DataRow? getRow(int index) {
-    if (index >= accounts.length) return null;
-    final record = accounts[index];
-    final selected = record.id != null && selectedIds.contains(record.id);
-    final isSuper = record.username == 'superchenergou';
-
-    return DataRow2(
-      selected: selected,
-      onSelectChanged: (value) {
-        if (record.id != null && value != null && !isSuper) {
-          onSelectChanged(record.id!, value);
-          notifyListeners();
+      data: tableData,
+      onSelect: (rows) {
+        final next = <int>{};
+        for (final row in rows ?? <dynamic>[]) {
+          if (row is Map && row['id'] is int) {
+            next.add(row['id'] as int);
+          }
+        }
+        for (final id in selectedIds.difference(next)) {
+          onSelectChange(id, false);
+        }
+        for (final id in next.difference(selectedIds)) {
+          onSelectChange(id, true);
         }
       },
-      cells: [
-        DataCell(
-          Container(
-            width: 40,
-            height: 40,
-            color: Colors.grey.shade200,
-            child: record.avatarPath != null && record.avatarPath!.isNotEmpty && File(record.avatarPath!).existsSync()
-                ? Image.file(File(record.avatarPath!), fit: BoxFit.cover)
-                : const Icon(Icons.person, size: 20, color: Colors.grey),
-          ),
-        ),
-        DataCell(Text(record.username)),
-        DataCell(Text(record.role)),
-        DataCell(Text(record.roles.map((e) => e.name).join(', '))),
-        DataCell(
-          Switch.adaptive(
-            value: record.status == 'active',
-            onChanged: isSuper
-                ? null
-                : (value) {
-                    onStatusChange(record, value);
-                  },
-          ),
-        ),
-        DataCell(Text(record.createdAt.split('T').first)),
-        DataCell(
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit, size: 18),
-                tooltip: '编辑',
-                onPressed: isSuper ? null : () => onEdit(record),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
-                tooltip: '删除',
-                onPressed: isSuper ? null : () => onDelete(record),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
-
-  @override
-  bool get isRowCountApproximate => false;
-
-  @override
-  int get rowCount => accounts.length;
-
-  @override
-  int get selectedRowCount => selectedIds.length;
 }

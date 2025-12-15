@@ -1,5 +1,5 @@
-import 'package:data_table_2/data_table_2.dart';
 import 'package:flutter/material.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../data/role_model.dart';
 
@@ -25,94 +25,101 @@ class RoleTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = _RoleTableSource(
-      roles: roles,
-      selectedIds: selectedIds,
-      onEdit: onEdit,
-      onDelete: onDelete,
-      onSelectChanged: onSelectChange,
-    );
-    return PaginatedDataTable2(
-      columnSpacing: 12,
-      horizontalMargin: 12,
-      headingRowHeight: 44,
-      dataRowHeight: 56,
-      minWidth: 800,
-      showCheckboxColumn: true,
-      rowsPerPage: rowsPerPage,
-      availableRowsPerPage: const [10, 20, 30],
-      onRowsPerPageChanged: onRowsPerPageChanged,
-      columns: const [
-        DataColumn2(label: Text('名称'), size: ColumnSize.L),
-        DataColumn2(label: Text('描述')),
-        DataColumn2(label: Text('权限')),
-        DataColumn2(label: Text('操作'), fixedWidth: 120),
-      ],
-      source: source,
-    );
-  }
-}
+    final data = roles
+        .map(
+          (role) => {
+            'id': role.id,
+            'name': role.name,
+            'description': role.description,
+            'permissions': role.permissions.join(', '),
+          },
+        )
+        .toList();
+    final theme = TDTheme.of(context);
+    final tableHeight = (rowsPerPage * 68).toDouble();
+    final tableWidth = MediaQuery.of(context).size.width;
 
-class _RoleTableSource extends DataTableSource {
-  _RoleTableSource({
-    required this.roles,
-    required this.selectedIds,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onSelectChanged,
-  });
-
-  final List<RoleRecord> roles;
-  final Set<int> selectedIds;
-  final void Function(RoleRecord record) onEdit;
-  final void Function(RoleRecord record) onDelete;
-  final void Function(int id, bool selected) onSelectChanged;
-
-  @override
-  DataRow? getRow(int index) {
-    if (index >= roles.length) return null;
-    final role = roles[index];
-    final selected = role.id != null && selectedIds.contains(role.id);
-    final isSuper = role.name == 'super_admin';
-
-    return DataRow2(
-      selected: selected,
-      onSelectChanged: (value) {
-        if (role.id != null && value != null && !isSuper) {
-          onSelectChanged(role.id!, value);
-          notifyListeners();
-        }
-      },
-      cells: [
-        DataCell(Text(role.name)),
-        DataCell(Text(role.description)),
-        DataCell(Text(role.permissions.join(', '))),
-        DataCell(
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit, size: 18),
-                tooltip: '编辑',
-                onPressed: isSuper ? null : () => onEdit(role),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
-                tooltip: '删除',
-                onPressed: isSuper ? null : () => onDelete(role),
-              ),
-            ],
-          ),
+    return TDTable(
+      bordered: true,
+      stripe: true,
+      rowHeight: 48,
+      height: tableHeight,
+      width: tableWidth,
+      backgroundColor: TDTheme.of(context).bgColorContainer,
+      columns: [
+        TDTableCol(
+          selection: true,
+          width: 56,
+          selectable: (index, row) {
+            if (index < 0 || index >= roles.length) return false;
+            final role = roles[index];
+            return role.id != null && role.name != 'super_admin';
+          },
+          checked: (index, row) {
+            if (index < 0 || index >= roles.length) return false;
+            final id = roles[index].id;
+            if (id == null) return false;
+            return selectedIds.contains(id);
+          },
+        ),
+        TDTableCol(title: '名称', colKey: 'name', ellipsis: true, width: 180),
+        TDTableCol(title: '描述', colKey: 'description', ellipsis: true, width: 240),
+        TDTableCol(title: '权限', colKey: 'permissions', ellipsis: true),
+        TDTableCol(
+          title: '操作',
+          colKey: 'actions',
+          width: 160,
+          fixed: TDTableColFixed.right,
+          cellBuilder: (_, index) {
+            if (index < 0 || index >= roles.length) {
+              return const SizedBox.shrink();
+            }
+            final role = roles[index];
+            final disabled = role.name == 'super_admin';
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: disabled ? null : () => onEdit(role),
+                  child: TDText(
+                    '编辑',
+                    style: TextStyle(
+                      color: disabled ? theme.textDisabledColor : theme.brandNormalColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: disabled ? null : () => onDelete(role),
+                  child: TDText(
+                    '删除',
+                    style: TextStyle(
+                      color: disabled ? theme.textDisabledColor : theme.errorColor6,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
+      data: data,
+      onSelect: (rows) {
+        final next = <int>{};
+        for (final row in rows ?? <dynamic>[]) {
+          if (row is Map && row['id'] is int) {
+            next.add(row['id'] as int);
+          }
+        }
+        for (final id in selectedIds.difference(next)) {
+          onSelectChange(id, false);
+        }
+        for (final id in next.difference(selectedIds)) {
+          onSelectChange(id, true);
+        }
+      },
     );
   }
-
-  @override
-  bool get isRowCountApproximate => false;
-
-  @override
-  int get rowCount => roles.length;
-
-  @override
-  int get selectedRowCount => selectedIds.length;
 }

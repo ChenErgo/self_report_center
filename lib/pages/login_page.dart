@@ -3,8 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
 
-import '../data/account_model.dart';
 import '../data/account_repository.dart';
 
 class LoginPage extends StatefulWidget {
@@ -25,7 +25,6 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _userController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
   final TextEditingController _captchaController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
 
   String _captchaText = _generateCaptcha();
   bool _loading = false;
@@ -44,6 +43,14 @@ class _LoginPageState extends State<LoginPage> {
     _loadRemembered();
   }
 
+  @override
+  void dispose() {
+    _userController.dispose();
+    _passController.dispose();
+    _captchaController.dispose();
+    super.dispose();
+  }
+
   void _refreshCaptcha() {
     setState(() {
       _captchaText = _generateCaptcha();
@@ -51,7 +58,18 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_userController.text.trim().isEmpty) {
+      setState(() => _error = '请输入账号');
+      return;
+    }
+    if (_passController.text.isEmpty) {
+      setState(() => _error = '请输入密码');
+      return;
+    }
+    if (_captchaController.text.trim().isEmpty) {
+      setState(() => _error = '请输入验证码');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -83,119 +101,119 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = TDTheme.of(context);
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Card(
-            elevation: 4,
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.teal.shade100,
+      backgroundColor: Colors.white,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE8F4F1), Color(0xFFD1E6DF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Card(
+              elevation: 10,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(color: theme.brandColor1),
+                            child: const Icon(Icons.desktop_mac, color: Colors.white, size: 28),
                           ),
-                          child: const Icon(Icons.security, color: Colors.teal),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
+                          const SizedBox(width: 14),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('管理后台登录', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                              SizedBox(height: 4),
+                              Text('桌面端，请输入账号、密码与验证码', style: TextStyle(color: Colors.black54)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      TDInput(
+                        leftLabel: '账号',
+                        controller: _userController,
+                        hintText: '请输入账号',
+                        backgroundColor: Colors.white,
+                        needClear: true,
+                      ),
+                      const SizedBox(height: 16),
+                      TDInput(
+                        leftLabel: '密码',
+                        controller: _passController,
+                        hintText: '请输入密码',
+                        obscureText: true,
+                        backgroundColor: Colors.white,
+                        needClear: true,
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('管理后台登录', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text('请输入账号、密码与验证码'),
+                          children: [
+                            Expanded(
+                              child: TDInput(
+                                leftLabel: '验证码',
+                                controller: _captchaController,
+                                hintText: '请输入验证码',
+                                backgroundColor: Colors.white,
+                                needClear: true,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            GestureDetector(
+                              onTap: _refreshCaptcha,
+                              child: CaptchaBox(text: _captchaText),
+                            ),
                           ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _userController,
-                    decoration: const InputDecoration(
-                      labelText: '账号',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                      prefixIcon: Icon(Icons.person),
-                    ),
-                      validator: (v) => (v == null || v.isEmpty) ? '请输入账号' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passController,
-                      obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: '密码',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                      validator: (v) => (v == null || v.isEmpty) ? '请输入密码' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _captchaController,
-                            decoration: const InputDecoration(
-                              labelText: '验证码',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                              prefixIcon: Icon(Icons.verified),
-                            ),
-                            validator: (v) => (v == null || v.isEmpty) ? '请输入验证码' : null,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        GestureDetector(
-                          onTap: _refreshCaptcha,
-                          child: CaptchaBox(text: _captchaText),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_error != null)
-                      Text(
-                        _error!,
-                        style: const TextStyle(color: Colors.red),
                       ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _loading ? null : _handleLogin,
-                        icon: _loading
-                            ? const SizedBox(
-                                height: 16,
-                                width: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.login),
-                    label: const Text('登录'),
+                      const SizedBox(height: 16),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                        ),
+                      TDCheckbox(
+                        id: 'remember',
+                        title: '记住账号和密码（仅本机存储）',
+                        checked: _rememberMe,
+                        onCheckBoxChanged: (checked) {
+                          setState(() {
+                            _rememberMe = checked;
+                          });
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    CheckboxListTile(
-                      value: _rememberMe,
-                      onChanged: (v) {
-                        if (v != null) {
-                          setState(() => _rememberMe = v);
-                        }
-                      },
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('记住账号和密码（仅本机存储）'),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TDButton(
+                          text: '登录',
+                          size: TDButtonSize.large,
+                          theme: TDButtonTheme.primary,
+                          disabled: _loading,
+                          onTap: _loading ? null : _handleLogin,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -203,14 +221,6 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _userController.dispose();
-    _passController.dispose();
-    _captchaController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadRemembered() async {
@@ -226,7 +236,7 @@ class _LoginPageState extends State<LoginPage> {
         if (pass != null) _passController.text = pass;
       });
     } catch (_) {
-      // Ignore persistence errors on desktop; fall back to manual input.
+      // ignore persistence errors
     }
   }
 
@@ -243,7 +253,7 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setBool('remember_flag', false);
       }
     } catch (_) {
-      // Ignore persistence errors; do not block login.
+      // ignore persistence errors
     }
   }
 }
@@ -277,7 +287,6 @@ class _CaptchaPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawRect(Offset.zero & size, bgPaint);
 
-    // Noise lines
     for (var i = 0; i < 6; i++) {
       final paint = Paint()
         ..color = Colors.teal.withOpacity(0.5)
@@ -287,7 +296,6 @@ class _CaptchaPainter extends CustomPainter {
       canvas.drawLine(p1, p2, paint);
     }
 
-    // Text
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
@@ -300,15 +308,10 @@ class _CaptchaPainter extends CustomPainter {
       ),
       textDirection: ui.TextDirection.ltr,
     )..layout();
-    final offset = Offset(
-      (size.width - textPainter.width) / 2,
-      (size.height - textPainter.height) / 2,
-    );
+    final offset = Offset((size.width - textPainter.width) / 2, (size.height - textPainter.height) / 2);
     textPainter.paint(canvas, offset);
   }
 
   @override
-  bool shouldRepaint(covariant _CaptchaPainter oldDelegate) {
-    return oldDelegate.text != text;
-  }
+  bool shouldRepaint(covariant _CaptchaPainter oldDelegate) => oldDelegate.text != text;
 }
