@@ -44,6 +44,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _accountSearchController = TextEditingController();
   final TextEditingController _roleSearchController = TextEditingController();
+  final Map<String, GlobalKey<NavigatorState>> _tabNavKeys = {};
   final Set<int> _selectedIds = {};
   final Set<int> _selectedAccountIds = {};
   final Set<int> _selectedRoleIds = {};
@@ -67,6 +68,9 @@ class _DashboardPageState extends State<DashboardPage> {
   AccountRecord? _currentAccount;
   final List<_OpenTab> _openTabs = [];
   String _activeTabLabel = '数据概览';
+  bool _reportsLoaded = false;
+  bool _accountsLoaded = false;
+  bool _rolesLoaded = false;
 
   final List<MenuEntry> _menuEntries = [
     MenuEntry(
@@ -105,6 +109,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _openTabs.add(_OpenTab(label: _selectedMenuLabel));
+    _ensureTabNavigator(_selectedMenuLabel);
     _initData();
   }
 
@@ -140,7 +145,10 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() => _loading = true);
     if (_roleView) {
       await _refreshRoles();
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _rolesLoaded = true;
+      });
       return;
     }
     if (_accountView) {
@@ -149,6 +157,7 @@ class _DashboardPageState extends State<DashboardPage> {
         _accounts = accounts;
         _selectedAccountIds.clear();
         _loading = false;
+        _accountsLoaded = true;
       });
     } else {
       final data = await widget.reportRepository.fetch(query: _searchTerm, category: _selectedCategory);
@@ -156,6 +165,7 @@ class _DashboardPageState extends State<DashboardPage> {
         _records = data;
         _selectedIds.clear();
         _loading = false;
+        _reportsLoaded = true;
       });
     }
   }
@@ -215,6 +225,7 @@ class _DashboardPageState extends State<DashboardPage> {
       _roleRecords = roles;
       _roles = allRoles;
       _selectedRoleIds.clear();
+      _rolesLoaded = true;
     });
   }
 
@@ -369,7 +380,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final cityController = TextEditingController(text: record.city);
 
     return showDialog<ReportRecord>(
-      context: context,
+      context: _dialogContext,
+      useRootNavigator: false,
       builder: (context) {
         return AlertDialog(
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -427,7 +439,8 @@ class _DashboardPageState extends State<DashboardPage> {
     String? errorText;
 
     return showDialog<AccountRecord>(
-      context: context,
+      context: _dialogContext,
+      useRootNavigator: false,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (dialogCtx, setStateDialog) {
@@ -660,7 +673,8 @@ class _DashboardPageState extends State<DashboardPage> {
     String? errorText;
 
     return showDialog<RoleRecord>(
-      context: context,
+      context: _dialogContext,
+      useRootNavigator: false,
       builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (innerCtx, setStateDialog) {
@@ -838,105 +852,17 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 _buildSideMenu(),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildTabs(),
-                        Container(
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          height: 1,
-                          color: Colors.grey.shade300,
-                        ),
-                        const SizedBox(height: 8),
-                        _buildToolbar(),
-                        const SizedBox(height: 12),
-                        Expanded(
-                        child: Card(
-                          clipBehavior: Clip.antiAlias,
-                          child: _loading
-                              ? const Center(child: CircularProgressIndicator())
-                              : Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '当前模块：$_selectedMenuLabel（${_roleView ? _roleRecords.length : _accountView ? _accounts.length : _records.length} 条记录）',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 8),
-                                        Expanded(
-                                          child: _roleView
-                                              ? RoleTable(
-                                              roles: _roleRecords,
-                                              rowsPerPage: _rowsPerPage,
-                                              onRowsPerPageChanged: (value) {
-                                                if (value != null) setState(() => _rowsPerPage = value);
-                                              },
-                                                  selectedIds: _selectedRoleIds,
-                                                  onSelectChange: (id, sel) {
-                                                    setState(() {
-                                                      if (sel) {
-                                                        _selectedRoleIds.add(id);
-                                                      } else {
-                                                        _selectedRoleIds.remove(id);
-                                                      }
-                                                    });
-                                                  },
-                                                  onEdit: _handleRoleEdit,
-                                                  onDelete: _handleRoleDelete,
-                                                  onStatusChange: _handleRoleStatusChange,
-                                                )
-                                              : _accountView
-                                                  ? AccountTable(
-                                                      accounts: _accounts,
-                                                      rowsPerPage: _rowsPerPage,
-                                                      onRowsPerPageChanged: (value) {
-                                                        if (value != null) setState(() => _rowsPerPage = value);
-                                                      },
-                                                      selectedIds: _selectedAccountIds,
-                                                      onSelectChange: (id, sel) {
-                                                        setState(() {
-                                                          if (sel) {
-                                                            _selectedAccountIds.add(id);
-                                                          } else {
-                                                            _selectedAccountIds.remove(id);
-                                                          }
-                                                        });
-                                                      },
-                                                      onEdit: _handleAccountEdit,
-                                                      onDelete: _handleAccountDelete,
-                                                      onStatusChange: _handleAccountStatusChange,
-                                                    )
-                                                  : ReportTable(
-                                                      records: _records,
-                                                      rowsPerPage: _rowsPerPage,
-                                                      onRowsPerPageChanged: (value) {
-                                                        if (value != null) setState(() => _rowsPerPage = value);
-                                                      },
-                                                      selectedIds: _selectedIds,
-                                                      onSelectChange: (id, sel) {
-                                                        setState(() {
-                                                          if (sel) {
-                                                            _selectedIds.add(id);
-                                                          } else {
-                                                            _selectedIds.remove(id);
-                                                          }
-                                                        });
-                                                      },
-                                                      onEdit: _handleEdit,
-                                                      onDelete: _handleDeleteSingle,
-                                                    ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTabs(),
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        height: 1,
+                        color: Colors.grey.shade300,
+                      ),
+                      Expanded(child: _buildTabContentStack()),
+                    ],
                   ),
                 ),
               ],
@@ -1315,18 +1241,18 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _openTab(MenuEntry entry) {
     final exists = _openTabs.any((t) => t.label == entry.label);
-    _dismissActiveDialog();
+    _ensureTabNavigator(entry.label);
     setState(() {
       if (!exists) {
         _openTabs.add(_OpenTab(label: entry.label, entry: entry));
       }
       _selectTab(entry.label, entry: entry, refresh: false);
     });
-    _refreshData();
+    _ensureDataForCurrentViewIfNeeded();
   }
 
   void _selectTab(String label, {MenuEntry? entry, bool refresh = true}) {
-    _dismissActiveDialog();
+    _ensureTabNavigator(label);
     _OpenTab target;
     if (entry != null) {
       target = _OpenTab(label: entry.label, entry: entry);
@@ -1362,7 +1288,32 @@ class _DashboardPageState extends State<DashboardPage> {
         _selectTab(fallback.label, entry: fallback.entry);
       }
     });
-    _refreshData();
+  }
+
+  BuildContext get _dialogContext {
+    return _currentTabNavKey.currentContext ?? context;
+  }
+
+  GlobalKey<NavigatorState> get _currentTabNavKey {
+    return _tabNavKeys[_activeTabLabel] ?? _ensureTabNavigator(_activeTabLabel);
+  }
+
+  GlobalKey<NavigatorState> _ensureTabNavigator(String label) {
+    return _tabNavKeys.putIfAbsent(label, () => GlobalKey<NavigatorState>());
+  }
+
+  Future<void> _ensureDataForCurrentViewIfNeeded() async {
+    if (_roleView && !_rolesLoaded) {
+      await _refreshData();
+      return;
+    }
+    if (_accountView && !_accountsLoaded) {
+      await _refreshData();
+      return;
+    }
+    if (!_roleView && !_accountView && !_reportsLoaded) {
+      await _refreshData();
+    }
   }
 
   Widget _buildTabs() {
@@ -1387,7 +1338,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       setState(() {
                         _selectTab(tab.label, entry: tab.entry, refresh: false);
                       });
-                      _refreshData();
+                      _ensureDataForCurrentViewIfNeeded();
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1415,6 +1366,128 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildTabContentStack() {
+    final activeIndex = _openTabs.indexWhere((t) => t.label == _activeTabLabel);
+    final children = _openTabs.map(_buildTabContent).toList();
+    return IndexedStack(
+      index: activeIndex >= 0 ? activeIndex : 0,
+      children: children,
+    );
+  }
+
+  Widget _buildTabContent(_OpenTab tab) {
+    final key = _ensureTabNavigator(tab.label);
+    final isAccount = tab.entry?.isAccount ?? (tab.label == '账号管理');
+    final isRole = tab.entry?.isRole ?? (tab.label == '角色管理');
+    final moduleLabel = tab.label;
+    return Navigator(
+      key: key,
+      onGenerateInitialRoutes: (nav, initial) => [
+        MaterialPageRoute(
+          builder: (innerCtx) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildToolbarFor(isAccount: isAccount, isRole: isRole),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '当前模块：$moduleLabel（${isRole ? _roleRecords.length : isAccount ? _accounts.length : _records.length} 条记录）',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: isRole
+                                      ? RoleTable(
+                                          roles: _roleRecords,
+                                          rowsPerPage: _rowsPerPage,
+                                          onRowsPerPageChanged: (value) {
+                                            if (value != null) setState(() => _rowsPerPage = value);
+                                          },
+                                          selectedIds: _selectedRoleIds,
+                                          onSelectChange: (id, sel) {
+                                            setState(() {
+                                              if (sel) {
+                                                _selectedRoleIds.add(id);
+                                              } else {
+                                                _selectedRoleIds.remove(id);
+                                              }
+                                            });
+                                          },
+                                          onEdit: _handleRoleEdit,
+                                          onDelete: _handleRoleDelete,
+                                          onStatusChange: _handleRoleStatusChange,
+                                        )
+                                      : isAccount
+                                          ? AccountTable(
+                                              accounts: _accounts,
+                                              rowsPerPage: _rowsPerPage,
+                                              onRowsPerPageChanged: (value) {
+                                                if (value != null) setState(() => _rowsPerPage = value);
+                                              },
+                                              selectedIds: _selectedAccountIds,
+                                              onSelectChange: (id, sel) {
+                                                setState(() {
+                                                  if (sel) {
+                                                    _selectedAccountIds.add(id);
+                                                  } else {
+                                                    _selectedAccountIds.remove(id);
+                                                  }
+                                                });
+                                              },
+                                              onEdit: _handleAccountEdit,
+                                              onDelete: _handleAccountDelete,
+                                              onStatusChange: _handleAccountStatusChange,
+                                            )
+                                          : ReportTable(
+                                              records: _records,
+                                              rowsPerPage: _rowsPerPage,
+                                              onRowsPerPageChanged: (value) {
+                                                if (value != null) setState(() => _rowsPerPage = value);
+                                              },
+                                              selectedIds: _selectedIds,
+                                              onSelectChange: (id, sel) {
+                                                setState(() {
+                                                  if (sel) {
+                                                    _selectedIds.add(id);
+                                                  } else {
+                                                    _selectedIds.remove(id);
+                                                  }
+                                                });
+                                              },
+                                              onEdit: _handleEdit,
+                                              onDelete: _handleDeleteSingle,
+                                            ),
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToolbarFor({required bool isAccount, required bool isRole}) {
+    if (isRole) return _buildRoleToolbar();
+    if (isAccount) return _buildAccountToolbar();
+    return _buildToolbar();
   }
 }
 
