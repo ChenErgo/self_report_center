@@ -5,6 +5,7 @@ class AccountRecord {
   AccountRecord({
     this.id,
     required this.username,
+    required this.nickname,
     required this.passwordHash,
     required this.role,
     required this.status,
@@ -15,6 +16,7 @@ class AccountRecord {
 
   final int? id;
   final String username;
+  final String nickname;
   final String passwordHash;
   final String role;
   final String status;
@@ -26,6 +28,7 @@ class AccountRecord {
     return {
       'id': id,
       'username': username,
+      'nickname': nickname,
       'passwordHash': passwordHash,
       'role': role,
       'status': status,
@@ -39,6 +42,7 @@ class AccountRecord {
     return AccountRecord(
       id: map['id'] as int?,
       username: (map['username'] ?? '') as String,
+      nickname: (map['nickname'] ?? '') as String,
       passwordHash: (map['passwordHash'] ?? '') as String,
       role: (map['role'] ?? '') as String,
       status: (map['status'] ?? '') as String,
@@ -51,6 +55,7 @@ class AccountRecord {
   AccountRecord copyWith({
     int? id,
     String? username,
+    String? nickname,
     String? passwordHash,
     String? role,
     String? status,
@@ -61,6 +66,7 @@ class AccountRecord {
     return AccountRecord(
       id: id ?? this.id,
       username: username ?? this.username,
+      nickname: nickname ?? this.nickname,
       passwordHash: passwordHash ?? this.passwordHash,
       role: role ?? this.role,
       status: status ?? this.status,

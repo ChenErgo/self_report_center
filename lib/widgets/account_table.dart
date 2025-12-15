@@ -64,6 +64,7 @@ class _AccountTableState extends State<AccountTable> {
           (record) => {
             'id': record.id,
             'username': record.username,
+            'nickname': record.nickname,
             'roles': record.roles.map((e) => e.name).join(', '),
             'statusText': record.status == 'active' ? '启用' : '禁用',
             'createdAt': record.createdAt.split('T').first,
@@ -135,6 +136,13 @@ class _AccountTableState extends State<AccountTable> {
                 TDTableCol(
                   title: '账号',
                   colKey: 'username',
+                  ellipsis: true,
+                  width: 180,
+                  align: TDTableColAlign.center,
+                ),
+                TDTableCol(
+                  title: '昵称',
+                  colKey: 'nickname',
                   ellipsis: true,
                   width: 180,
                   align: TDTableColAlign.center,

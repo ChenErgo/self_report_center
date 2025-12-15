@@ -23,7 +23,7 @@ class AppDatabase {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (db, version) async {
           await _createTables(db);
         },
@@ -40,6 +40,9 @@ class AppDatabase {
           }
           if (oldVersion < 5) {
             await _addRoleStatusColumn(db);
+          }
+          if (oldVersion < 6) {
+            await _addNicknameColumn(db);
           }
         },
         onOpen: (db) async {
@@ -88,6 +91,7 @@ class AppDatabase {
       CREATE TABLE accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
+        nickname TEXT,
         passwordHash TEXT,
         role TEXT,
         status TEXT,
@@ -102,6 +106,15 @@ class AppDatabase {
     final hasAvatar = columns.any((row) => row['name'] == 'avatarPath');
     if (!hasAvatar) {
       await db.execute("ALTER TABLE accounts ADD COLUMN avatarPath TEXT;");
+    }
+  }
+
+  static Future<void> _addNicknameColumn(Database db) async {
+    final columns = await db.rawQuery("PRAGMA table_info(accounts)");
+    final hasNickname = columns.any((row) => row['name'] == 'nickname');
+    if (!hasNickname) {
+      await db.execute("ALTER TABLE accounts ADD COLUMN nickname TEXT;");
+      await db.update('accounts', {'nickname': ''});
     }
   }
 
@@ -146,6 +159,7 @@ class AppDatabase {
     } else {
       await _addAvatarColumn(db);
     }
+    await _addNicknameColumn(db);
     await _createRolesTables(db);
     await _addRoleStatusColumn(db);
   }
@@ -168,6 +182,7 @@ class AppDatabase {
     // 默认超级管理员：账号 superchenergou / 密码 superchenergou （后续请修改或删除）
     await db.insert('accounts', {
       'username': 'superchenergou',
+      'nickname': '超级管理员',
       'passwordHash': AccountRecord.hashPassword('superchenergou'),
       'role': 'super_admin',
       'status': 'active',
@@ -256,8 +271,8 @@ class AppDatabase {
     final like = '%$query%';
     final rows = await db.query(
       'accounts',
-      where: 'username LIKE ? OR role LIKE ? OR status LIKE ?',
-      whereArgs: [like, like, like],
+      where: 'username LIKE ? OR nickname LIKE ? OR role LIKE ? OR status LIKE ?',
+      whereArgs: [like, like, like, like],
       orderBy: 'createdAt DESC',
     );
     return rows.map(AccountRecord.fromMap).toList();

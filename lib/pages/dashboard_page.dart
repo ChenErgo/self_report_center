@@ -160,6 +160,7 @@ class _DashboardPageState extends State<DashboardPage> {
       orElse: () => AccountRecord(
         id: null,
         username: '',
+        nickname: '',
         passwordHash: '',
         role: '',
         status: '',
@@ -167,6 +168,8 @@ class _DashboardPageState extends State<DashboardPage> {
         createdAt: '',
       ),
     );
+    final superNickname =
+        superAccount.nickname.isNotEmpty ? superAccount.nickname : '超级管理员';
     if (superAccount.username != 'superchenergou' || superAccount.roles.isNotEmpty) {
       return accounts;
     }
@@ -176,14 +179,22 @@ class _DashboardPageState extends State<DashboardPage> {
     );
     if (superAccount.id != null && superRole.id != null) {
       await widget.accountRepository.update(
-        superAccount.copyWith(role: superRole.name, roles: [superRole]),
+        superAccount.copyWith(
+          role: superRole.name,
+          roles: [superRole],
+          nickname: superNickname,
+        ),
         roleIds: [superRole.id!],
       );
       accounts = await widget.accountRepository.fetchAll(query: _accountSearchTerm);
     } else {
       accounts = accounts
           .map((a) => a.username == 'superchenergou'
-              ? a.copyWith(role: superRole.name, roles: superRole.id != null ? [superRole] : a.roles)
+              ? a.copyWith(
+                  role: superRole.name,
+                  roles: superRole.id != null ? [superRole] : a.roles,
+                  nickname: superNickname,
+                )
               : a)
           .toList();
     }
@@ -399,6 +410,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<AccountRecord?> _openAccountDialog({AccountRecord? existing, bool isNew = false}) {
     final usernameController = TextEditingController(text: existing?.username ?? '');
+    final nicknameController = TextEditingController(text: existing?.nickname ?? '');
     final passwordController = TextEditingController();
     bool statusActive = (existing?.status ?? 'active') == 'active';
     final isSuper = existing?.username == 'superchenergou';
@@ -450,6 +462,17 @@ class _DashboardPageState extends State<DashboardPage> {
                                 readOnly: isSuper || !isNew,
                                 hintText: '请输入账号',
                                 needClear: isNew && !isSuper,
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '昵称',
+                              backgroundColor: Colors.transparent,
+                              child: TDInput(
+                                controller: nicknameController,
+                                backgroundColor: Colors.transparent,
+                                hintText: '请输入昵称（可选）',
+                                needClear: true,
                               ),
                             ),
                             TDFormItem(
@@ -602,6 +625,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     final record = AccountRecord(
                       id: existing?.id,
                       username: username,
+                      nickname: nicknameController.text.trim(),
                       passwordHash: passwordHash,
                       role: primaryRoleName ?? existing?.role ?? 'user',
                       status: statusActive ? 'active' : 'disabled',
