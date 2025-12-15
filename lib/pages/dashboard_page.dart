@@ -281,8 +281,12 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _handleAccountStatusChange(AccountRecord record, bool active) async {
     if (record.username == 'superchenergou') return;
     final updated = record.copyWith(status: active ? 'active' : 'disabled');
+    setState(() {
+      _accounts = _accounts
+          .map((a) => a.id == updated.id ? updated : a)
+          .toList();
+    });
     await widget.accountRepository.update(updated);
-    await _refreshData();
   }
 
   // Role handlers
@@ -308,9 +312,15 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _handleRoleStatusChange(RoleRecord role, bool active) async {
     if (role.name == 'super_admin') return;
     final updated = role.copyWith(status: active ? 'active' : 'disabled');
+    setState(() {
+      _roleRecords = _roleRecords
+          .map((r) => r.id == updated.id ? updated : r)
+          .toList();
+      _roles = _roles
+          .map((r) => r.id == updated.id ? updated : r)
+          .toList();
+    });
     await widget.roleRepository.update(updated);
-    await _loadRolesAndPermissions();
-    await _refreshData();
   }
 
   Future<void> _handleRoleDelete(RoleRecord role) async {
@@ -616,6 +626,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final descController = TextEditingController(text: existing?.description ?? '');
     final selectedPerms = <String>{...?(existing?.permissions)};
     bool statusActive = (existing?.status ?? 'active') == 'active';
+    String? errorText;
 
     return showDialog<RoleRecord>(
       context: context,
@@ -626,76 +637,143 @@ class _DashboardPageState extends State<DashboardPage> {
               shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
               title: Text(existing == null ? '新增角色' : '编辑角色'),
               content: SizedBox(
-                width: 460,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        readOnly: existing?.name == 'super_admin',
-                        decoration: InputDecoration(
-                          labelText: '角色名称',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: descController,
-                        decoration: const InputDecoration(
-                          labelText: '描述',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                          isDense: true,
-                        ),
-                      ),
-                      SwitchListTile(
-                        dense: true,
-                        title: const Text('状态'),
-                        value: statusActive,
-                        onChanged: existing?.name == 'super_admin'
-                            ? null
-                            : (val) {
-                                setStateDialog(() {
-                                  statusActive = val;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 12),
-                      const Text('菜单权限'),
-                      Column(
-                        children: kMenuPermissions.map((perm) {
-                          final checked = selectedPerms.contains(perm.key);
-                          return CheckboxListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            value: checked,
-                            title: Text(perm.label),
-                            onChanged: existing?.name == 'super_admin'
-                                ? null
-                                : (val) {
-                                    if (val == null) return;
-                                    setStateDialog(() {
-                                      if (val) {
-                                        selectedPerms.add(perm.key);
-                                      } else {
-                                        selectedPerms.remove(perm.key);
-                                      }
-                                    });
+                width: 520,
+                height: 520,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: TDForm(
+                          data: const {},
+                          rules: const {},
+                          labelWidth: 90,
+                          isHorizontal: true,
+                          formShowErrorMessage: true,
+                          onSubmit: () {},
+                          items: [
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '角色名称',
+                              backgroundColor: Colors.transparent,
+                              itemRule: [
+                                TDFormValidation(
+                                  errorMessage: '请输入角色名称',
+                                  type: TDFormItemType.input,
+                                  validate: (value) {
+                                    final v = (value as String?)?.trim() ?? '';
+                                    return v.isEmpty ? '请输入角色名称' : null;
                                   },
-                          );
-                        }).toList(),
+                                ),
+                              ],
+                              child: TDInput(
+                                controller: nameController,
+                                backgroundColor: Colors.transparent,
+                                readOnly: existing?.name == 'super_admin',
+                                hintText: '请输入角色名称',
+                                needClear: existing?.name != 'super_admin',
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '描述',
+                              backgroundColor: Colors.transparent,
+                              child: TDInput(
+                                controller: descController,
+                                backgroundColor: Colors.transparent,
+                                hintText: '请输入描述',
+                                needClear: true,
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '状态',
+                              backgroundColor: Colors.transparent,
+                              child: Row(
+                                children: [
+                                  TDSwitch(
+                                    isOn: statusActive,
+                                    enable: existing?.name != 'super_admin',
+                                    size: TDSwitchSize.small,
+                                    onChanged: (val) {
+                                      setStateDialog(() {
+                                        statusActive = val;
+                                      });
+                                      return false;
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(statusActive ? '启用' : '禁用'),
+                                ],
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '菜单权限',
+                              backgroundColor: Colors.transparent,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  const spacing = 12.0;
+                                  final itemWidth =
+                                      ((constraints.maxWidth - spacing) / 2).clamp(140.0, constraints.maxWidth);
+                                  return Wrap(
+                                    spacing: spacing,
+                                    runSpacing: 8,
+                                    children: kMenuPermissions.map((perm) {
+                                      final checked = selectedPerms.contains(perm.key);
+                                      return SizedBox(
+                                        width: itemWidth,
+                                        child: TDCheckbox(
+                                          id: 'perm-${perm.key}',
+                                          title: perm.label,
+                                          checked: checked,
+                                          enable: existing?.name != 'super_admin',
+                                          style: TDCheckboxStyle.square,
+                                          size: TDCheckBoxSize.small,
+                                          backgroundColor: Colors.transparent,
+                                          onCheckBoxChanged: (val) {
+                                            setStateDialog(() {
+                                              if (val) {
+                                                selectedPerms.add(perm.key);
+                                              } else {
+                                                selectedPerms.remove(perm.key);
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    if (errorText != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('取消')),
                 FilledButton(
                   onPressed: () {
-                    if (nameController.text.trim().isEmpty) return;
+                    if (nameController.text.trim().isEmpty) {
+                      setStateDialog(() {
+                        errorText = '请输入角色名称';
+                      });
+                      return;
+                    }
                     Navigator.of(dialogCtx).pop(
                       RoleRecord(
                         id: existing?.id,
