@@ -56,7 +56,7 @@ class _DashboardPageState extends State<DashboardPage> {
   String _accountSearchTerm = '';
   String _roleSearchTerm = '';
   String? _selectedCategory;
-  String _selectedMenuLabel = '数据概览';
+  String _selectedMenuLabel = '主页';
   bool _accountView = false;
   bool _roleView = false;
   bool _isSuperAdmin = false;
@@ -67,12 +67,17 @@ class _DashboardPageState extends State<DashboardPage> {
   List<RoleRecord> _roleRecords = [];
   AccountRecord? _currentAccount;
   final List<_OpenTab> _openTabs = [];
-  String _activeTabLabel = '数据概览';
+  String _activeTabLabel = '主页';
   bool _reportsLoaded = false;
   bool _accountsLoaded = false;
   bool _rolesLoaded = false;
 
   final List<MenuEntry> _menuEntries = [
+    MenuEntry(
+      label: '主页',
+      icon: Icons.home,
+      permissionKey: null,
+    ),
     MenuEntry(
       label: '报表中心',
       icon: Icons.analytics,
@@ -1000,14 +1005,18 @@ class _DashboardPageState extends State<DashboardPage> {
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Text('导航', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
           ..._menuEntries.map((entry) {
             final visibleChildren = entry.children.where(_canAccess).toList();
             if (!_canAccess(entry) && visibleChildren.isEmpty) {
               return const SizedBox.shrink();
+            }
+            if (visibleChildren.isEmpty) {
+              return ListTile(
+                leading: Icon(entry.icon, size: 20),
+                title: Text(entry.label),
+                selected: _selectedMenuLabel == entry.label,
+                onTap: () => _handleMenuTap(entry),
+              );
             }
             return ExpansionTile(
               leading: Icon(entry.icon),
@@ -1352,7 +1361,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                   ),
-                  if (_openTabs.length > 1)
+                  if (_openTabs.length > 1 && tab.label != '主页')
                     InkWell(
                       onTap: () => _closeTab(tab.label),
                       child: Padding(
