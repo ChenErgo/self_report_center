@@ -64,6 +64,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<AccountRecord> _accounts = [];
   List<RoleRecord> _roles = [];
   List<RoleRecord> _roleRecords = [];
+  AccountRecord? _currentAccount;
 
   final List<MenuEntry> _menuEntries = [
     MenuEntry(
@@ -126,6 +127,9 @@ class _DashboardPageState extends State<DashboardPage> {
       _roles = roles;
       _isSuperAdmin = superAdmin;
       _currentPermissions = perms;
+      if (acct != null) {
+        _currentAccount = acct;
+      }
     });
   }
 
@@ -943,9 +947,12 @@ class _DashboardPageState extends State<DashboardPage> {
           Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
-                color: Colors.teal.shade100,
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: const Icon(Icons.dashboard_customize, color: Colors.teal),
               ),
               const SizedBox(width: 12),
@@ -959,17 +966,80 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ),
           const Spacer(),
-          Wrap(
-            spacing: 16,
-            children: [
-              Text('当前用户：${widget.currentUsername}'),
-              const Text('控制台'),
-              const Text('通知中心'),
-              const Text('帮助文档'),
-              TextButton.icon(onPressed: widget.onLogout, icon: const Icon(Icons.logout), label: const Text('退出登录')),
-            ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                _buildUserAvatar(),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.currentUsername, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(
+                      _displayNicknameForCurrentUser(),
+                      style: const TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  onPressed: widget.onLogout,
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('退出'),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  String _displayNicknameForCurrentUser() {
+    final acct = _currentAccount ??
+        _accounts.firstWhere(
+          (a) => a.username == widget.currentUsername,
+          orElse: () => AccountRecord(
+            id: null,
+            username: widget.currentUsername,
+            nickname: '',
+            passwordHash: '',
+            role: '',
+            status: '',
+            avatarPath: null,
+            roles: const [],
+            createdAt: '',
+          ),
+        );
+    return acct.nickname.isNotEmpty ? acct.nickname : '欢迎回来';
+  }
+
+  Widget _buildUserAvatar() {
+    final path = _currentAccount?.avatarPath;
+    if (path != null && path.isNotEmpty && File(path).existsSync()) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Image.file(
+          File(path),
+          width: 36,
+          height: 36,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: Colors.teal.shade300,
+      child: Text(
+        widget.currentUsername.isNotEmpty
+            ? widget.currentUsername[0].toUpperCase()
+            : '?',
+        style: const TextStyle(color: Colors.white),
       ),
     );
   }
