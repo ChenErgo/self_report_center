@@ -10,6 +10,7 @@ class RoleTable extends StatefulWidget {
     super.key,
     required this.roles,
     required this.rowsPerPage,
+    required this.resetToken,
     required this.onRowsPerPageChanged,
     required this.selectedIds,
     required this.onSelectChange,
@@ -20,6 +21,7 @@ class RoleTable extends StatefulWidget {
 
   final List<RoleRecord> roles;
   final int rowsPerPage;
+  final int resetToken;
   final ValueChanged<int?> onRowsPerPageChanged;
   final Set<int> selectedIds;
   final void Function(int id, bool selected) onSelectChange;
@@ -40,6 +42,9 @@ class _RoleTableState extends State<RoleTable> {
     final totalPages = _totalPages;
     if (_currentPage > totalPages) {
       _currentPage = totalPages;
+    }
+    if (oldWidget.resetToken != widget.resetToken) {
+      _currentPage = 1;
     }
   }
 

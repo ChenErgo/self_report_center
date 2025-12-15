@@ -12,6 +12,7 @@ class AccountTable extends StatefulWidget {
     super.key,
     required this.accounts,
     required this.rowsPerPage,
+    required this.resetToken,
     required this.onRowsPerPageChanged,
     required this.selectedIds,
     required this.onSelectChange,
@@ -22,6 +23,7 @@ class AccountTable extends StatefulWidget {
 
   final List<AccountRecord> accounts;
   final int rowsPerPage;
+  final int resetToken;
   final ValueChanged<int?> onRowsPerPageChanged;
   final Set<int> selectedIds;
   final void Function(int id, bool selected) onSelectChange;
@@ -42,6 +44,9 @@ class _AccountTableState extends State<AccountTable> {
     final totalPages = _totalPages;
     if (_currentPage > totalPages) {
       _currentPage = totalPages;
+    }
+    if (oldWidget.resetToken != widget.resetToken) {
+      _currentPage = 1;
     }
   }
 

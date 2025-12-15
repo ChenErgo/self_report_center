@@ -51,7 +51,9 @@ class _DashboardPageState extends State<DashboardPage> {
   final fk.Faker _faker = fk.Faker();
 
   bool _loading = true;
-  int _rowsPerPage = 10;
+  int _reportRowsPerPage = 10;
+  int _accountRowsPerPage = 10;
+  int _roleRowsPerPage = 10;
   String _searchTerm = '';
   String _accountSearchTerm = '';
   String _roleSearchTerm = '';
@@ -71,6 +73,7 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _reportsLoaded = false;
   bool _accountsLoaded = false;
   bool _rolesLoaded = false;
+  final Map<String, int> _tabResetTokens = {};
 
   final List<MenuEntry> _menuEntries = [
     MenuEntry(
@@ -114,6 +117,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _openTabs.add(_OpenTab(label: _selectedMenuLabel));
+    _tabResetTokens[_selectedMenuLabel] = 0;
     _ensureTabNavigator(_selectedMenuLabel);
     _initData();
   }
@@ -1067,7 +1071,7 @@ class _DashboardPageState extends State<DashboardPage> {
         const SizedBox(width: 8),
         FilledButton.icon(onPressed: _handleAdd, icon: const Icon(Icons.add), label: const Text('新增')),
         const Spacer(),
-        Text('分页：每页 $_rowsPerPage 条 | 共 ${_records.length} 条', style: const TextStyle(color: Colors.black54)),
+        Text('分页：每页 $_reportRowsPerPage 条 | 共 ${_records.length} 条', style: const TextStyle(color: Colors.black54)),
       ],
     );
   }
@@ -1136,7 +1140,7 @@ class _DashboardPageState extends State<DashboardPage> {
           child: const Text('新增账号'),
         ),
         const Spacer(),
-        Text('分页：每页 $_rowsPerPage 条 | 共 ${_accounts.length} 条', style: const TextStyle(color: Colors.black54)),
+        Text('分页：每页 $_accountRowsPerPage 条 | 共 ${_accounts.length} 条', style: const TextStyle(color: Colors.black54)),
       ],
     );
   }
@@ -1205,7 +1209,7 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Text('删除选中 (${_selectedRoleIds.length})'),
         ),
         const Spacer(),
-        Text('分页：每页 $_rowsPerPage 条 | 共 ${_roleRecords.length} 条', style: const TextStyle(color: Colors.black54)),
+        Text('分页：每页 $_roleRowsPerPage 条 | 共 ${_roleRecords.length} 条', style: const TextStyle(color: Colors.black54)),
       ],
     );
   }
@@ -1251,6 +1255,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void _openTab(MenuEntry entry) {
     final exists = _openTabs.any((t) => t.label == entry.label);
     _ensureTabNavigator(entry.label);
+    _tabResetTokens.putIfAbsent(entry.label, () => 0);
     setState(() {
       if (!exists) {
         _openTabs.add(_OpenTab(label: entry.label, entry: entry));
@@ -1325,6 +1330,31 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<void> _handleTabRefresh(_OpenTab tab) async {
+    setState(() {
+      if (tab.entry?.isRole ?? (tab.label == '角色管理')) {
+        _roleRowsPerPage = 10;
+      } else if (tab.entry?.isAccount ?? (tab.label == '账号管理')) {
+        _accountRowsPerPage = 10;
+      } else {
+        _reportRowsPerPage = 10;
+      }
+      _tabResetTokens[tab.label] = (_tabResetTokens[tab.label] ?? 0) + 1;
+      _loading = true;
+    });
+    if (tab.entry?.isRole ?? (_selectedMenuLabel == '角色管理')) {
+      _rolesLoaded = false;
+    } else if (tab.entry?.isAccount ?? (_selectedMenuLabel == '账号管理')) {
+      _accountsLoaded = false;
+    } else {
+      _reportsLoaded = false;
+    }
+    await _refreshData();
+    // Ensure dialog state is cleared in this tab
+    final key = _ensureTabNavigator(tab.label);
+    key.currentState?.popUntil((route) => route.isFirst);
+  }
+
   Widget _buildTabs() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1343,12 +1373,18 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               child: Row(
                 children: [
-                  InkWell(
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
                       setState(() {
                         _selectTab(tab.label, entry: tab.entry, refresh: false);
                       });
                       _ensureDataForCurrentViewIfNeeded();
+                    },
+                    onDoubleTap: () {
+                      if (isActive) {
+                        _handleTabRefresh(tab);
+                      }
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1422,9 +1458,14 @@ class _DashboardPageState extends State<DashboardPage> {
                                   child: isRole
                                       ? RoleTable(
                                           roles: _roleRecords,
-                                          rowsPerPage: _rowsPerPage,
+                                          rowsPerPage: _roleRowsPerPage,
+                                          resetToken: _tabResetTokens[moduleLabel] ?? 0,
                                           onRowsPerPageChanged: (value) {
-                                            if (value != null) setState(() => _rowsPerPage = value);
+                                            if (value != null) {
+                                              setState(() {
+                                                _roleRowsPerPage = value;
+                                              });
+                                            }
                                           },
                                           selectedIds: _selectedRoleIds,
                                           onSelectChange: (id, sel) {
@@ -1441,11 +1482,16 @@ class _DashboardPageState extends State<DashboardPage> {
                                           onStatusChange: _handleRoleStatusChange,
                                         )
                                       : isAccount
-                                          ? AccountTable(
+                                      ? AccountTable(
                                               accounts: _accounts,
-                                              rowsPerPage: _rowsPerPage,
+                                              rowsPerPage: _accountRowsPerPage,
+                                              resetToken: _tabResetTokens[moduleLabel] ?? 0,
                                               onRowsPerPageChanged: (value) {
-                                                if (value != null) setState(() => _rowsPerPage = value);
+                                                if (value != null) {
+                                                  setState(() {
+                                                    _accountRowsPerPage = value;
+                                                  });
+                                                }
                                               },
                                               selectedIds: _selectedAccountIds,
                                               onSelectChange: (id, sel) {
@@ -1463,9 +1509,13 @@ class _DashboardPageState extends State<DashboardPage> {
                                             )
                                           : ReportTable(
                                               records: _records,
-                                              rowsPerPage: _rowsPerPage,
+                                              rowsPerPage: _reportRowsPerPage,
                                               onRowsPerPageChanged: (value) {
-                                                if (value != null) setState(() => _rowsPerPage = value);
+                                                if (value != null) {
+                                                  setState(() {
+                                                    _reportRowsPerPage = value;
+                                                  });
+                                                }
                                               },
                                               selectedIds: _selectedIds,
                                               onSelectChange: (id, sel) {
