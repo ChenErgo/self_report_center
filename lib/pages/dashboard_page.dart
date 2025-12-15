@@ -1016,21 +1016,62 @@ class _DashboardPageState extends State<DashboardPage> {
             }
             if (visibleChildren.isEmpty) {
               return ListTile(
-                leading: Icon(entry.icon, size: 20),
-                title: Text(entry.label),
+                leading: Icon(
+                  entry.icon,
+                  size: 20,
+                  color: _selectedMenuLabel == entry.label ? _accentColor : null,
+                ),
+                title: Text(
+                  entry.label,
+                  style: TextStyle(
+                    color: _selectedMenuLabel == entry.label ? _accentColor : Colors.black,
+                  ),
+                ),
                 selected: _selectedMenuLabel == entry.label,
+                selectedColor: _accentColor,
                 onTap: () => _handleMenuTap(entry),
               );
             }
             return ExpansionTile(
-              leading: Icon(entry.icon),
-              title: Text(entry.label),
+              leading: Icon(
+                entry.icon,
+                color: _selectedMenuLabel == entry.label
+                    ? _accentColor
+                    : (visibleChildren.any((c) => _selectedMenuLabel == c.label) ? _accentColor : null),
+              ),
+              iconColor: (_selectedMenuLabel == entry.label ||
+                      visibleChildren.any((c) => _selectedMenuLabel == c.label))
+                  ? _accentColor
+                  : Colors.black54,
+              collapsedIconColor: (_selectedMenuLabel == entry.label ||
+                      visibleChildren.any((c) => _selectedMenuLabel == c.label))
+                  ? _accentColor
+                  : Colors.black54,
+              title: Text(
+                entry.label,
+                style: TextStyle(
+                  color: (_selectedMenuLabel == entry.label ||
+                          visibleChildren.any((c) => _selectedMenuLabel == c.label))
+                      ? _accentColor
+                      : Colors.black,
+                ),
+              ),
               children: visibleChildren
                   .map(
                     (child) => ListTile(
-                      leading: Icon(child.icon, size: 20),
-                      title: Text(child.label),
+                      leading: Icon(
+                        child.icon,
+                        size: 20,
+                        color: _selectedMenuLabel == child.label ? _accentColor : null,
+                      ),
+                      title: Text(
+                        child.label,
+                        style: TextStyle(
+                          color: _selectedMenuLabel == child.label ? _accentColor : Colors.black,
+                        ),
+                      ),
                       selected: _selectedMenuLabel == child.label,
+                      selectedColor: _accentColor,
                       onTap: () => _handleMenuTap(child),
                     ),
                   )
