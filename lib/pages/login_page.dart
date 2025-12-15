@@ -40,6 +40,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+    _captchaController.text = _captchaText;
     _loadRemembered();
   }
 
@@ -54,6 +55,7 @@ class _LoginPageState extends State<LoginPage> {
   void _refreshCaptcha() {
     setState(() {
       _captchaText = _generateCaptcha();
+      _captchaController.text = _captchaText;
     });
   }
 

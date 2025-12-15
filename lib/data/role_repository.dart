@@ -6,8 +6,8 @@ class RoleRepository {
 
   final AppDatabase db;
 
-  Future<List<RoleRecord>> fetchAll() {
-    return db.fetchRolesWithPermissions();
+  Future<List<RoleRecord>> fetchAll({String query = '', String? status}) {
+    return db.fetchRolesWithPermissions(query: query, status: status);
   }
 
   Future<int> create(RoleRecord role) {

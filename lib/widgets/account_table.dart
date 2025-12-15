@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../data/account_model.dart';
@@ -56,15 +58,13 @@ class _AccountTableState extends State<AccountTable> {
   @override
   Widget build(BuildContext context) {
     final theme = TDTheme.of(context);
-    final tableHeight = (widget.rowsPerPage * 68).toDouble();
     final pageRecords = _pageRecords;
     final tableData = pageRecords
         .map(
           (record) => {
             'id': record.id,
             'username': record.username,
-            'role': record.role,
-            'roleNames': record.roles.map((e) => e.name).join(', '),
+            'roles': record.roles.map((e) => e.name).join(', '),
             'statusText': record.status == 'active' ? '启用' : '禁用',
             'createdAt': record.createdAt.split('T').first,
             'record': record,
@@ -74,6 +74,21 @@ class _AccountTableState extends State<AccountTable> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Keep table height within available space to avoid Column overflow.
+        const paginationHeight = 104.0; // allow headroom for controls
+        const spacerHeight = 8.0;
+        final desiredTableHeight = (widget.rowsPerPage * 68).toDouble();
+        var tableHeight = desiredTableHeight;
+        if (constraints.hasBoundedHeight) {
+          final available =
+              constraints.maxHeight - paginationHeight - spacerHeight;
+          if (available.isFinite) {
+            // Leave a small cushion to avoid minor overflows from padding/margins.
+            final safeAvailable = available - 16;
+            tableHeight =
+                math.max(0, math.min(desiredTableHeight, safeAvailable));
+          }
+        }
         final tableWidth = constraints.maxWidth;
         return Column(
           children: [
@@ -126,15 +141,8 @@ class _AccountTableState extends State<AccountTable> {
                 ),
                 TDTableCol(
                   title: '角色',
-                  colKey: 'role',
-                  ellipsis: true,
-                  width: 140,
-                  align: TDTableColAlign.center,
-                ),
-                TDTableCol(
-                  title: '角色列表',
-                  colKey: 'roleNames',
-                  ellipsis: true,
+                  colKey: 'roles',
+                  ellipsis: false,
                   width: 280,
                   align: TDTableColAlign.center,
                 ),
@@ -181,7 +189,7 @@ class _AccountTableState extends State<AccountTable> {
                   title: '操作',
                   colKey: 'actions',
                   width: 180,
-                  fixed: TDTableColFixed.right,
+                  // fixed: TDTableColFixed.right,
                   align: TDTableColAlign.center,
                   cellBuilder: (_, index) {
                     final record = _recordAt(tableData, index);

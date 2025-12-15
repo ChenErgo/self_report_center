@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:tdesign_flutter/tdesign_flutter.dart';
 
 import '../constants/menu_keys.dart';
 import '../data/account_model.dart';
@@ -38,8 +39,11 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  static const double _toolbarItemHeight = 44;
+  static const Color _accentColor = Color(0xFF0052D9);
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _accountSearchController = TextEditingController();
+  final TextEditingController _roleSearchController = TextEditingController();
   final Set<int> _selectedIds = {};
   final Set<int> _selectedAccountIds = {};
   final Set<int> _selectedRoleIds = {};
@@ -49,6 +53,7 @@ class _DashboardPageState extends State<DashboardPage> {
   int _rowsPerPage = 10;
   String _searchTerm = '';
   String _accountSearchTerm = '';
+  String _roleSearchTerm = '';
   String? _selectedCategory;
   String _selectedMenuLabel = '数据概览';
   bool _accountView = false;
@@ -110,7 +115,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final perms = <String>{};
     bool superAdmin = false;
     if (acct != null && acct.roles.isNotEmpty) {
-      for (final r in acct.roles) {
+      for (final r in acct.roles.where((r) => r.status == 'active')) {
         perms.addAll(r.permissions);
         if (r.name == 'super_admin') superAdmin = true;
       }
@@ -132,7 +137,7 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
     if (_accountView) {
-      final accounts = await widget.accountRepository.fetchAll(query: _accountSearchTerm);
+      final accounts = await _refreshAccountsWithSuperRole();
       setState(() {
         _accounts = accounts;
         _selectedAccountIds.clear();
@@ -148,11 +153,49 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<List<AccountRecord>> _refreshAccountsWithSuperRole() async {
+    var accounts = await widget.accountRepository.fetchAll(query: _accountSearchTerm);
+    final superAccount = accounts.firstWhere(
+      (a) => a.username == 'superchenergou',
+      orElse: () => AccountRecord(
+        id: null,
+        username: '',
+        passwordHash: '',
+        role: '',
+        status: '',
+        avatarPath: null,
+        createdAt: '',
+      ),
+    );
+    if (superAccount.username != 'superchenergou' || superAccount.roles.isNotEmpty) {
+      return accounts;
+    }
+    final superRole = _roles.firstWhere(
+      (r) => r.name == 'super_admin',
+      orElse: () => RoleRecord(id: null, name: 'super_admin', description: '', permissions: [], status: 'active'),
+    );
+    if (superAccount.id != null && superRole.id != null) {
+      await widget.accountRepository.update(
+        superAccount.copyWith(role: superRole.name, roles: [superRole]),
+        roleIds: [superRole.id!],
+      );
+      accounts = await widget.accountRepository.fetchAll(query: _accountSearchTerm);
+    } else {
+      accounts = accounts
+          .map((a) => a.username == 'superchenergou'
+              ? a.copyWith(role: superRole.name, roles: superRole.id != null ? [superRole] : a.roles)
+              : a)
+          .toList();
+    }
+    return accounts;
+  }
+
   Future<void> _refreshRoles() async {
-    final roles = await widget.roleRepository.fetchAll();
+    final roles = await widget.roleRepository.fetchAll(query: _roleSearchTerm);
+    final allRoles = _roleSearchTerm.isEmpty ? roles : await widget.roleRepository.fetchAll();
     setState(() {
       _roleRecords = roles;
-      _roles = roles;
+      _roles = allRoles;
       _selectedRoleIds.clear();
     });
   }
@@ -262,6 +305,14 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<void> _handleRoleStatusChange(RoleRecord role, bool active) async {
+    if (role.name == 'super_admin') return;
+    final updated = role.copyWith(status: active ? 'active' : 'disabled');
+    await widget.roleRepository.update(updated);
+    await _loadRolesAndPermissions();
+    await _refreshData();
+  }
+
   Future<void> _handleRoleDelete(RoleRecord role) async {
     if (role.name == 'super_admin' || role.id == null) return;
     await widget.roleRepository.delete(role.id!);
@@ -339,12 +390,12 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<AccountRecord?> _openAccountDialog({AccountRecord? existing, bool isNew = false}) {
     final usernameController = TextEditingController(text: existing?.username ?? '');
     final passwordController = TextEditingController();
-    final roleController = TextEditingController(text: existing?.role ?? 'user');
     bool statusActive = (existing?.status ?? 'active') == 'active';
     final isSuper = existing?.username == 'superchenergou';
     final createdAt = existing?.createdAt ?? DateTime.now().toIso8601String();
     String? avatarPath = existing?.avatarPath;
     final selectedRoleIds = <int>{...existing?.roles.where((r) => r.id != null).map((r) => r.id!) ?? {}};
+    String? errorText;
 
     return showDialog<AccountRecord>(
       context: context,
@@ -355,67 +406,158 @@ class _DashboardPageState extends State<DashboardPage> {
               shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
               title: Text(isNew ? '新增账号' : '编辑账号'),
               content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: usernameController,
-                        readOnly: isSuper || !isNew,
-                        decoration: InputDecoration(
-                          labelText: '账号',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                          isDense: true,
+                width: 520,
+                height: 520,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: TDForm(
+                          data: const {},
+                          rules: const {},
+                          labelWidth: 90,
+                          isHorizontal: true,
+                          formShowErrorMessage: true,
+                          onSubmit: () {},
+                          items: [
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '账号',
+                              backgroundColor: Colors.transparent,
+                              itemRule: [
+                                TDFormValidation(
+                                  errorMessage: '请输入账号',
+                                  type: TDFormItemType.input,
+                                  validate: (value) {
+                                    final v = (value as String?)?.trim() ?? '';
+                                    return v.isEmpty ? '请输入账号' : null;
+                                  },
+                                ),
+                              ],
+                              child: TDInput(
+                                controller: usernameController,
+                                backgroundColor: Colors.transparent,
+                                readOnly: isSuper || !isNew,
+                                hintText: '请输入账号',
+                                needClear: isNew && !isSuper,
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: isNew ? '密码' : '新密码',
+                              backgroundColor: Colors.transparent,
+                              itemRule: isNew
+                                  ? [
+                                      TDFormValidation(
+                                        errorMessage: '请输入密码',
+                                        type: TDFormItemType.input,
+                                        validate: (value) {
+                                          final v = (value as String?) ?? '';
+                                          return v.isEmpty ? '请输入密码' : null;
+                                        },
+                                      ),
+                                    ]
+                                  : null,
+                              child: TDInput(
+                                controller: passwordController,
+                                backgroundColor: Colors.transparent,
+                                obscureText: true,
+                                hintText: isNew ? '请输入密码' : '留空则不变',
+                                needClear: true,
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '角色',
+                              backgroundColor: Colors.transparent,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  const spacing = 12.0;
+                                  final itemWidth =
+                                      ((constraints.maxWidth - spacing) / 2).clamp(120.0, constraints.maxWidth);
+                                  return Wrap(
+                                    spacing: spacing,
+                                    runSpacing: 8,
+                                    children: _roles.map((r) {
+                                      final checked = selectedRoleIds.contains(r.id);
+                                      return SizedBox(
+                                        width: itemWidth,
+                                        child: TDCheckbox(
+                                          id: 'role-${r.id}',
+                                          title: r.name,
+                                          checked: checked,
+                                          enable: r.id != null,
+                                          style: TDCheckboxStyle.square,
+                                          size: TDCheckBoxSize.small,
+                                          backgroundColor: Colors.transparent,
+                                          onCheckBoxChanged: (val) {
+                                            if (r.id == null) return;
+                                            setStateDialog(() {
+                                              if (val) {
+                                                selectedRoleIds.add(r.id!);
+                                              } else {
+                                                selectedRoleIds.remove(r.id!);
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '头像',
+                              backgroundColor: Colors.transparent,
+                              child: _AvatarPicker(
+                                initialPath: avatarPath,
+                                onPicked: (path) {
+                                  setStateDialog(() {
+                                    avatarPath = path;
+                                  });
+                                },
+                              ),
+                            ),
+                            TDFormItem(
+                              type: TDFormItemType.input,
+                              label: '状态',
+                              backgroundColor: Colors.transparent,
+                              child: Row(
+                                children: [
+                                  TDSwitch(
+                                    isOn: statusActive,
+                                    enable: !isSuper,
+                                    size: TDSwitchSize.small,
+                                    onChanged: (value) {
+                                      setStateDialog(() {
+                                        statusActive = value;
+                                      });
+                                      return false;
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(statusActive ? '启用' : '禁用'),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      _LabeledField(label: isNew ? '密码' : '新密码（留空则不变）', controller: passwordController),
-                      _LabeledField(label: '角色', controller: roleController),
-                      const SizedBox(height: 8),
-                      _AvatarPicker(
-                        initialPath: avatarPath,
-                        onPicked: (path) {
-                          setStateDialog(() {
-                            avatarPath = path;
-                          });
-                        },
+                    ),
+                    if (errorText != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      const Align(alignment: Alignment.centerLeft, child: Text('选择角色（可多选）')),
-                      Column(
-                        children: _roles.map((r) {
-                          final checked = selectedRoleIds.contains(r.id);
-                          return CheckboxListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            value: checked,
-                            title: Text(r.name),
-                            onChanged: (val) {
-                              if (r.id == null || val == null) return;
-                              setStateDialog(() {
-                                if (val) {
-                                  selectedRoleIds.add(r.id!);
-                                } else {
-                                  selectedRoleIds.remove(r.id!);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                      SwitchListTile(
-                        title: const Text('状态（启用/禁用）'),
-                        value: statusActive,
-                        onChanged: isSuper
-                            ? null
-                            : (value) {
-                                setStateDialog(() {
-                                  statusActive = value;
-                                });
-                              },
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
               actions: [
@@ -423,21 +565,35 @@ class _DashboardPageState extends State<DashboardPage> {
                 FilledButton(
                   onPressed: () {
                     final username = usernameController.text.trim();
-                    if (username.isEmpty) return;
+                    if (username.isEmpty) {
+                      setStateDialog(() {
+                        errorText = '请输入账号';
+                      });
+                      return;
+                    }
                     final newPassword = passwordController.text;
                     String passwordHash = existing?.passwordHash ?? '';
                     if (isNew && newPassword.isEmpty) {
-                      Navigator.of(dialogCtx).pop();
+                      setStateDialog(() {
+                        errorText = '请输入密码';
+                      });
                       return;
                     }
                     if (newPassword.isNotEmpty) {
                       passwordHash = AccountRecord.hashPassword(newPassword);
                     }
+                    String? primaryRoleName;
+                    for (final r in _roles) {
+                      if (r.id != null && selectedRoleIds.contains(r.id)) {
+                        primaryRoleName = r.name;
+                        break;
+                      }
+                    }
                     final record = AccountRecord(
                       id: existing?.id,
                       username: username,
                       passwordHash: passwordHash,
-                      role: roleController.text.trim().isEmpty ? 'user' : roleController.text.trim(),
+                      role: primaryRoleName ?? existing?.role ?? 'user',
                       status: statusActive ? 'active' : 'disabled',
                       avatarPath: avatarPath,
                       createdAt: createdAt,
@@ -459,6 +615,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final nameController = TextEditingController(text: existing?.name ?? '');
     final descController = TextEditingController(text: existing?.description ?? '');
     final selectedPerms = <String>{...?(existing?.permissions)};
+    bool statusActive = (existing?.status ?? 'active') == 'active';
 
     return showDialog<RoleRecord>(
       context: context,
@@ -492,6 +649,18 @@ class _DashboardPageState extends State<DashboardPage> {
                           border: OutlineInputBorder(borderRadius: BorderRadius.zero),
                           isDense: true,
                         ),
+                      ),
+                      SwitchListTile(
+                        dense: true,
+                        title: const Text('状态'),
+                        value: statusActive,
+                        onChanged: existing?.name == 'super_admin'
+                            ? null
+                            : (val) {
+                                setStateDialog(() {
+                                  statusActive = val;
+                                });
+                              },
                       ),
                       const SizedBox(height: 12),
                       const Text('菜单权限'),
@@ -533,6 +702,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         name: nameController.text.trim(),
                         description: descController.text.trim(),
                         permissions: selectedPerms.toList(),
+                        status: statusActive ? 'active' : 'disabled',
                       ),
                     );
                   },
@@ -584,11 +754,11 @@ class _DashboardPageState extends State<DashboardPage> {
                                         Expanded(
                                           child: _roleView
                                               ? RoleTable(
-                                                  roles: _roleRecords,
-                                                  rowsPerPage: _rowsPerPage,
-                                                  onRowsPerPageChanged: (value) {
-                                                    if (value != null) setState(() => _rowsPerPage = value);
-                                                  },
+                                              roles: _roleRecords,
+                                              rowsPerPage: _rowsPerPage,
+                                              onRowsPerPageChanged: (value) {
+                                                if (value != null) setState(() => _rowsPerPage = value);
+                                              },
                                                   selectedIds: _selectedRoleIds,
                                                   onSelectChange: (id, sel) {
                                                     setState(() {
@@ -601,6 +771,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                                   },
                                                   onEdit: _handleRoleEdit,
                                                   onDelete: _handleRoleDelete,
+                                                  onStatusChange: _handleRoleStatusChange,
                                                 )
                                               : _accountView
                                                   ? AccountTable(
@@ -775,28 +946,65 @@ class _DashboardPageState extends State<DashboardPage> {
     return Row(
       children: [
         SizedBox(
-          width: 240,
+          width: 260,
+          height: _toolbarItemHeight,
           child: TextField(
             controller: _accountSearchController,
             decoration: InputDecoration(
               isDense: true,
               hintText: '搜索账号、角色、状态',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.zero),
+              prefixIcon: const Icon(Icons.search),
+              prefixIconColor: _accentColor,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.zero,
+                borderSide: const BorderSide(color: _accentColor),
+              ),
+              enabledBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.zero,
+                borderSide: BorderSide(color: _accentColor),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.zero,
+                borderSide: BorderSide(color: _accentColor, width: 1.2),
+              ),
             ),
             onSubmitted: (_) => _handleAccountSearch(),
           ),
         ),
         const SizedBox(width: 8),
-        FilledButton.icon(onPressed: _handleAccountSearch, icon: const Icon(Icons.filter_alt), label: const Text('筛选')),
-        const SizedBox(width: 8),
-        OutlinedButton.icon(
-          onPressed: _selectedAccountIds.isEmpty ? null : _handleAccountBulkDelete,
-          icon: const Icon(Icons.delete_outline),
-          label: Text('批量删除 (${_selectedAccountIds.length})'),
+        OutlinedButton(
+          onPressed: _handleAccountSearch,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _accentColor,
+            side: const BorderSide(color: _accentColor),
+            minimumSize: Size(0, _toolbarItemHeight),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+          child: const Text('筛选'),
         ),
         const SizedBox(width: 8),
-        FilledButton.icon(onPressed: _handleAccountAdd, icon: const Icon(Icons.add), label: const Text('新增账号')),
+        OutlinedButton(
+          onPressed: _selectedAccountIds.isEmpty ? null : _handleAccountBulkDelete,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _accentColor,
+            side: const BorderSide(color: _accentColor),
+            minimumSize: Size(0, _toolbarItemHeight),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+          child: Text('批量删除 (${_selectedAccountIds.length})'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: _handleAccountAdd,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentColor,
+            foregroundColor: Colors.white,
+            minimumSize: Size(0, _toolbarItemHeight),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+          child: const Text('新增账号'),
+        ),
         const Spacer(),
         Text('分页：每页 $_rowsPerPage 条 | 共 ${_accounts.length} 条', style: const TextStyle(color: Colors.black54)),
       ],
@@ -806,12 +1014,65 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildRoleToolbar() {
     return Row(
       children: [
-        FilledButton.icon(onPressed: _handleRoleAdd, icon: const Icon(Icons.add), label: const Text('新增角色')),
+        SizedBox(
+          width: 260,
+          height: _toolbarItemHeight,
+          child: TextField(
+            controller: _roleSearchController,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: '搜索名称、描述',
+              prefixIcon: const Icon(Icons.search),
+              prefixIconColor: _accentColor,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: const OutlineInputBorder(
+                borderRadius: BorderRadius.zero,
+                borderSide: BorderSide(color: _accentColor),
+              ),
+              enabledBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.zero,
+                borderSide: BorderSide(color: _accentColor),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.zero,
+                borderSide: BorderSide(color: _accentColor, width: 1.2),
+              ),
+            ),
+            onSubmitted: (_) => _handleRoleSearch(),
+          ),
+        ),
         const SizedBox(width: 8),
-        OutlinedButton.icon(
+        OutlinedButton(
+          onPressed: _handleRoleSearch,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _accentColor,
+            side: const BorderSide(color: _accentColor),
+            minimumSize: Size(0, _toolbarItemHeight),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+          child: const Text('筛选'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: _handleRoleAdd,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentColor,
+            foregroundColor: Colors.white,
+            minimumSize: Size(0, _toolbarItemHeight),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+          child: const Text('新增角色'),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
           onPressed: _selectedRoleIds.isEmpty ? null : _handleRoleDeleteSelected,
-          icon: const Icon(Icons.delete_outline),
-          label: Text('删除选中 (${_selectedRoleIds.length})'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _accentColor,
+            side: const BorderSide(color: _accentColor),
+            minimumSize: Size(0, _toolbarItemHeight),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+          child: Text('删除选中 (${_selectedRoleIds.length})'),
         ),
         const Spacer(),
         Text('分页：每页 $_rowsPerPage 条 | 共 ${_roleRecords.length} 条', style: const TextStyle(color: Colors.black54)),
@@ -855,6 +1116,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _handleAccountSearch() async {
     _accountSearchTerm = _accountSearchController.text.trim();
+    await _refreshData();
+  }
+
+  Future<void> _handleRoleSearch() async {
+    _roleSearchTerm = _roleSearchController.text.trim();
     await _refreshData();
   }
 }
@@ -916,19 +1182,16 @@ class _AvatarPicker extends StatefulWidget {
 
 class _AvatarPickerState extends State<_AvatarPicker> {
   String? _path;
-  final TextEditingController _manualPathController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _path = widget.initialPath;
-    _manualPathController.text = widget.initialPath ?? '';
   }
 
   @override
   void dispose() {
-    _manualPathController.dispose();
     super.dispose();
   }
 
@@ -964,49 +1227,9 @@ class _AvatarPickerState extends State<_AvatarPicker> {
               : const Icon(Icons.person, size: 32, color: Colors.grey),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 200,
-              child: TextField(
-                controller: _manualPathController,
-                decoration: InputDecoration(
-                  isDense: true,
-                  labelText: '本地路径',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                ),
-                onSubmitted: (value) => _setPath(value),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.upload), label: const Text('选择图片')),
-                const SizedBox(width: 8),
-                OutlinedButton(onPressed: () => _setPath(_manualPathController.text.trim()), child: const Text('使用路径')),
-              ],
-            ),
-          ],
-        ),
+        OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.upload), label: const Text('选择图片')),
       ],
     );
-  }
-
-  Future<void> _setPath(String? path) async {
-    if (path == null || path.isEmpty) return;
-    try {
-      final bytes = await File(path).readAsBytes();
-      await _copyAndSetPath(path, bytes);
-    } catch (e, st) {
-      // ignore: avoid_print
-      print('头像路径复制失败: $e\n$st');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('无法读取/保存头像，请选择可访问的图片文件：$e')),
-        );
-      }
-    }
   }
 
   Future<void> _copyAndSetPath(String sourcePath, List<int> bytes) async {
@@ -1020,7 +1243,6 @@ class _AvatarPickerState extends State<_AvatarPicker> {
     if (mounted) {
       setState(() {
         _path = targetPath;
-        _manualPathController.text = targetPath;
       });
     }
     widget.onPicked(targetPath);

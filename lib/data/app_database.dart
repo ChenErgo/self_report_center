@@ -23,7 +23,7 @@ class AppDatabase {
     final database = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onCreate: (db, version) async {
           await _createTables(db);
         },
@@ -37,6 +37,9 @@ class AppDatabase {
           if (oldVersion < 4) {
             await _createRolesTables(db);
             await _seedRoles(db);
+          }
+          if (oldVersion < 5) {
+            await _addRoleStatusColumn(db);
           }
         },
         onOpen: (db) async {
@@ -102,12 +105,22 @@ class AppDatabase {
     }
   }
 
+  static Future<void> _addRoleStatusColumn(Database db) async {
+    final columns = await db.rawQuery("PRAGMA table_info(roles)");
+    final hasStatus = columns.any((row) => row['name'] == 'status');
+    if (!hasStatus) {
+      await db.execute("ALTER TABLE roles ADD COLUMN status TEXT DEFAULT 'active';");
+      await db.update('roles', {'status': 'active'});
+    }
+  }
+
   static Future<void> _createRolesTables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS roles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE,
-        description TEXT
+        description TEXT,
+        status TEXT
       )
     ''');
     await db.execute('''
@@ -134,6 +147,7 @@ class AppDatabase {
       await _addAvatarColumn(db);
     }
     await _createRolesTables(db);
+    await _addRoleStatusColumn(db);
   }
 
   Future<void> _seedReportsIfEmpty() async {
@@ -175,6 +189,7 @@ class AppDatabase {
     final roleId = await db.insert('roles', {
       'name': 'super_admin',
       'description': '超级管理员',
+      'status': 'active',
     });
     for (final perm in allPerms) {
       await db.insert('role_permissions', {'roleId': roleId, 'permissionKey': perm});
@@ -270,8 +285,23 @@ class AppDatabase {
   }
 
   // Roles
-  Future<List<RoleRecord>> fetchRolesWithPermissions() async {
-    final rolesRaw = await db.query('roles', orderBy: 'id ASC');
+  Future<List<RoleRecord>> fetchRolesWithPermissions({String query = '', String? status}) async {
+    final conditions = <String>[];
+    final args = <Object?>[];
+    if (query.isNotEmpty) {
+      conditions.add('(name LIKE ? OR description LIKE ?)');
+      args..add('%$query%')..add('%$query%');
+    }
+    if (status != null && status.isNotEmpty) {
+      conditions.add('status = ?');
+      args.add(status);
+    }
+    final rolesRaw = await db.query(
+      'roles',
+      where: conditions.isEmpty ? null : conditions.join(' AND '),
+      whereArgs: conditions.isEmpty ? null : args,
+      orderBy: 'id ASC',
+    );
     final permsRaw = await db.query('role_permissions');
     return rolesRaw.map((r) {
       final id = r['id'] as int;
@@ -280,6 +310,7 @@ class AppDatabase {
         id: id,
         name: (r['name'] ?? '') as String,
         description: (r['description'] ?? '') as String,
+        status: (r['status'] ?? 'active') as String,
         permissions: perms,
       );
     }).toList();
@@ -289,6 +320,7 @@ class AppDatabase {
     final roleId = await db.insert('roles', {
       'name': role.name,
       'description': role.description,
+      'status': role.status,
     });
     await _replaceRolePermissions(roleId, role.permissions);
     return roleId;
@@ -298,7 +330,7 @@ class AppDatabase {
     if (role.id == null) return;
     await db.update(
       'roles',
-      {'name': role.name, 'description': role.description},
+      {'name': role.name, 'description': role.description, 'status': role.status},
       where: 'id = ?',
       whereArgs: [role.id],
     );
@@ -339,7 +371,7 @@ class AppDatabase {
   Future<List<RoleRecord>> _getRolesForAccount(int? accountId) async {
     if (accountId == null) return [];
     final raw = await db.rawQuery('''
-      SELECT roles.id, roles.name, roles.description
+      SELECT roles.id, roles.name, roles.description, roles.status
       FROM account_roles
       JOIN roles ON roles.id = account_roles.roleId
       WHERE account_roles.accountId = ?
@@ -352,6 +384,7 @@ class AppDatabase {
         id: id,
         name: (r['name'] ?? '') as String,
         description: (r['description'] ?? '') as String,
+        status: (r['status'] ?? 'active') as String,
         permissions: perms,
       );
     }).toList();
