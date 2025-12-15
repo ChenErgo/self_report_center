@@ -65,6 +65,8 @@ class _DashboardPageState extends State<DashboardPage> {
   List<RoleRecord> _roles = [];
   List<RoleRecord> _roleRecords = [];
   AccountRecord? _currentAccount;
+  final List<_OpenTab> _openTabs = [];
+  String _activeTabLabel = '数据概览';
 
   final List<MenuEntry> _menuEntries = [
     MenuEntry(
@@ -102,6 +104,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    _openTabs.add(_OpenTab(label: _selectedMenuLabel));
     _initData();
   }
 
@@ -840,23 +843,30 @@ class _DashboardPageState extends State<DashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildTabs(),
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          height: 1,
+                          color: Colors.grey.shade300,
+                        ),
+                        const SizedBox(height: 8),
                         _buildToolbar(),
                         const SizedBox(height: 12),
                         Expanded(
-                          child: Card(
-                            clipBehavior: Clip.antiAlias,
-                            child: _loading
-                                ? const Center(child: CircularProgressIndicator())
-                                : Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '当前模块：$_selectedMenuLabel（${_roleView ? _roleRecords.length : _accountView ? _accounts.length : _records.length} 条记录）',
-                                          style: const TextStyle(fontWeight: FontWeight.bold),
-                                        ),
-                                        const SizedBox(height: 8),
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: _loading
+                              ? const Center(child: CircularProgressIndicator())
+                              : Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '当前模块：$_selectedMenuLabel（${_roleView ? _roleRecords.length : _accountView ? _accounts.length : _records.length} 条记录）',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 8),
                                         Expanded(
                                           child: _roleView
                                               ? RoleTable(
@@ -1285,13 +1295,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _handleMenuTap(MenuEntry entry) {
-    setState(() {
-      _selectedCategory = entry.category;
-      _selectedMenuLabel = entry.label;
-      _accountView = entry.isAccount;
-      _roleView = entry.isRole;
-    });
-    _refreshData();
+    _openTab(entry);
   }
 
   Future<void> _handleSearch() async {
@@ -1308,6 +1312,116 @@ class _DashboardPageState extends State<DashboardPage> {
     _roleSearchTerm = _roleSearchController.text.trim();
     await _refreshData();
   }
+
+  void _openTab(MenuEntry entry) {
+    final exists = _openTabs.any((t) => t.label == entry.label);
+    _dismissActiveDialog();
+    setState(() {
+      if (!exists) {
+        _openTabs.add(_OpenTab(label: entry.label, entry: entry));
+      }
+      _selectTab(entry.label, entry: entry, refresh: false);
+    });
+    _refreshData();
+  }
+
+  void _selectTab(String label, {MenuEntry? entry, bool refresh = true}) {
+    _dismissActiveDialog();
+    _OpenTab target;
+    if (entry != null) {
+      target = _OpenTab(label: entry.label, entry: entry);
+    } else {
+      target = _openTabs.firstWhere(
+        (t) => t.label == label,
+        orElse: () => _OpenTab(label: label),
+      );
+    }
+    _activeTabLabel = target.label;
+    _selectedCategory = target.entry?.category;
+    _selectedMenuLabel = target.label;
+    _accountView = target.entry?.isAccount ?? (_selectedMenuLabel == '账号管理');
+    _roleView = target.entry?.isRole ?? (_selectedMenuLabel == '角色管理');
+    if (refresh) {
+      _refreshData();
+    }
+  }
+
+  void _dismissActiveDialog() {
+    final nav = Navigator.of(context, rootNavigator: true);
+    if (nav.canPop()) {
+      nav.pop();
+    }
+  }
+
+  void _closeTab(String label) {
+    if (_openTabs.length <= 1) return;
+    setState(() {
+      _openTabs.removeWhere((t) => t.label == label);
+      if (_activeTabLabel == label) {
+        final fallback = _openTabs.last;
+        _selectTab(fallback.label, entry: fallback.entry);
+      }
+    });
+    _refreshData();
+  }
+
+  Widget _buildTabs() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _openTabs.map((tab) {
+            final isActive = tab.label == _activeTabLabel;
+            return Container(
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: isActive ? Colors.white : Colors.grey.shade100,
+                border: Border.all(color: isActive ? _accentColor : Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectTab(tab.label, entry: tab.entry, refresh: false);
+                      });
+                      _refreshData();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Text(
+                        tab.label,
+                        style: TextStyle(
+                          color: isActive ? _accentColor : Colors.black87,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_openTabs.length > 1)
+                    InkWell(
+                      onTap: () => _closeTab(tab.label),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Icon(Icons.close, size: 16, color: Colors.grey.shade700),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _OpenTab {
+  _OpenTab({required this.label, this.entry});
+  final String label;
+  final MenuEntry? entry;
 }
 
 class MenuEntry {
