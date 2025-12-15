@@ -1140,7 +1140,7 @@ class _DashboardPageState extends State<DashboardPage> {
               hintText: '搜索账号、角色、状态',
               prefixIcon: const Icon(Icons.search),
               prefixIconColor: _accentColor,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.zero,
                 borderSide: const BorderSide(color: _accentColor),
@@ -1163,7 +1163,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: OutlinedButton.styleFrom(
             foregroundColor: _accentColor,
             side: const BorderSide(color: _accentColor),
-            minimumSize: Size(0, _toolbarItemHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           ),
           child: const Text('筛选'),
@@ -1174,7 +1174,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: OutlinedButton.styleFrom(
             foregroundColor: _accentColor,
             side: const BorderSide(color: _accentColor),
-            minimumSize: Size(0, _toolbarItemHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           ),
           child: Text('批量删除 (${_selectedAccountIds.length})'),
@@ -1185,7 +1185,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: ElevatedButton.styleFrom(
             backgroundColor: _accentColor,
             foregroundColor: Colors.white,
-            minimumSize: Size(0, _toolbarItemHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           ),
           child: const Text('新增账号'),
@@ -1209,7 +1209,7 @@ class _DashboardPageState extends State<DashboardPage> {
               hintText: '搜索名称、描述',
               prefixIcon: const Icon(Icons.search),
               prefixIconColor: _accentColor,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: const OutlineInputBorder(
                 borderRadius: BorderRadius.zero,
                 borderSide: BorderSide(color: _accentColor),
@@ -1232,7 +1232,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: OutlinedButton.styleFrom(
             foregroundColor: _accentColor,
             side: const BorderSide(color: _accentColor),
-            minimumSize: Size(0, _toolbarItemHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           ),
           child: const Text('筛选'),
@@ -1243,7 +1243,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: ElevatedButton.styleFrom(
             backgroundColor: _accentColor,
             foregroundColor: Colors.white,
-            minimumSize: Size(0, _toolbarItemHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           ),
           child: const Text('新增角色'),
@@ -1254,7 +1254,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: OutlinedButton.styleFrom(
             foregroundColor: _accentColor,
             side: const BorderSide(color: _accentColor),
-            minimumSize: Size(0, _toolbarItemHeight),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           ),
           child: Text('删除选中 (${_selectedRoleIds.length})'),
