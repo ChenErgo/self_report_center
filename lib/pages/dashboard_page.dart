@@ -1011,7 +1011,10 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           ..._menuEntries.map((entry) {
             final visibleChildren = entry.children.where(_canAccess).toList();
-            if (!_canAccess(entry) && visibleChildren.isEmpty) {
+            final hasChildren = entry.children.isNotEmpty;
+            final hasVisibleChildren = visibleChildren.isNotEmpty;
+            if ((!_canAccess(entry) && !hasVisibleChildren) ||
+                (hasChildren && !hasVisibleChildren && entry.permissionKey == null)) {
               return const SizedBox.shrink();
             }
             if (visibleChildren.isEmpty) {

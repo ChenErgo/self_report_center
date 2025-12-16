@@ -87,11 +87,20 @@ class _LoginPageState extends State<LoginPage> {
       _refreshCaptcha();
       return;
     }
-    final account = await widget.accountRepository.findByUsername(username);
+    final account = await widget.accountRepository.findDetailByUsername(username);
     if (account == null || account.status != 'active' || !account.verifyPassword(password)) {
       setState(() {
         _loading = false;
         _error = '账号或密码错误，或账号已禁用';
+      });
+      _refreshCaptcha();
+      return;
+    }
+    final activeRoles = account.roles.where((r) => r.status == 'active').toList();
+    if (activeRoles.isEmpty) {
+      setState(() {
+        _loading = false;
+        _error = '账号关联的角色已禁用，无法登录';
       });
       _refreshCaptcha();
       return;
