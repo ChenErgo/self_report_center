@@ -206,12 +206,16 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
-                        child: TDButton(
-                          text: '登录',
-                          size: TDButtonSize.large,
-                          theme: TDButtonTheme.primary,
-                          disabled: _loading,
-                          onTap: _loading ? null : _handleLogin,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _loading ? null : _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0052D9),
+                            foregroundColor: Colors.white,
+                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                          child: const Text('登录'),
                         ),
                       ),
                     ],
