@@ -1,11 +1,14 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:faker/faker.dart' as fk;
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:tdesign_flutter/tdesign_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../constants/menu_keys.dart';
 import '../data/account_model.dart';
@@ -215,8 +218,7 @@ class _DashboardPageState extends State<DashboardPage> {
         createdAt: '',
       ),
     );
-    final superNickname =
-        superAccount.nickname.isNotEmpty ? superAccount.nickname : '超级管理员';
+    final superNickname = superAccount.nickname.isNotEmpty ? superAccount.nickname : '超级管理员';
     if (superAccount.username != 'superchenergou' || superAccount.roles.isNotEmpty) {
       return accounts;
     }
@@ -259,20 +261,10 @@ class _DashboardPageState extends State<DashboardPage> {
     });
   }
 
-  // Menu and permissions
   bool _canAccess(MenuEntry entry) {
     if (_isSuperAdmin) return true;
     if (entry.permissionKey == null) return true;
     return _currentPermissions.contains(entry.permissionKey);
-  }
-
-  // Report handlers
-  Future<void> _handleEdit(ReportRecord record) async {
-    final updated = await _openEditDialog(record);
-    if (updated != null) {
-      await widget.reportRepository.update(updated);
-      await _refreshData();
-    }
   }
 
   Future<void> _handleAdd() async {
@@ -280,6 +272,18 @@ class _DashboardPageState extends State<DashboardPage> {
     final created = await _openEditDialog(base, isNew: true);
     if (created != null) {
       await widget.reportRepository.create(created);
+      await _refreshData();
+    }
+  }
+
+  Future<void> _handleEdit(ReportRecord record) async {
+    final updated = await _openEditDialog(record);
+    if (updated != null) {
+      if (record.id != null) {
+        await widget.reportRepository.update(updated.copyWith(id: record.id));
+      } else {
+        await widget.reportRepository.create(updated);
+      }
       await _refreshData();
     }
   }
@@ -296,7 +300,6 @@ class _DashboardPageState extends State<DashboardPage> {
     await _refreshData();
   }
 
-  // Account handlers
   Future<void> _handleAccountAdd() async {
     final record = await _openAccountDialog(isNew: true);
     if (record != null) {
@@ -336,7 +339,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _handleAccountBulkDelete() async {
     if (_selectedAccountIds.isEmpty) return;
-    final filtered = _accounts.where((e) => e.username != 'superchenergou' && e.id != null && _selectedAccountIds.contains(e.id)).map((e) => e.id!).toSet();
+    final filtered = _accounts
+        .where((e) => e.username != 'superchenergou' && e.id != null && _selectedAccountIds.contains(e.id))
+        .map((e) => e.id!)
+        .toSet();
     if (filtered.isEmpty) return;
     final ok = await _confirmDestructive(
       title: '确认批量删除账号',
@@ -351,14 +357,11 @@ class _DashboardPageState extends State<DashboardPage> {
     if (record.username == 'superchenergou') return;
     final updated = record.copyWith(status: active ? 'active' : 'disabled');
     setState(() {
-      _accounts = _accounts
-          .map((a) => a.id == updated.id ? updated : a)
-          .toList();
+      _accounts = _accounts.map((a) => a.id == updated.id ? updated : a).toList();
     });
     await widget.accountRepository.update(updated);
   }
 
-  // Role handlers
   Future<void> _handleRoleAdd() async {
     final role = await _openRoleDialog();
     if (role != null) {
@@ -382,12 +385,8 @@ class _DashboardPageState extends State<DashboardPage> {
     if (role.name == 'super_admin') return;
     final updated = role.copyWith(status: active ? 'active' : 'disabled');
     setState(() {
-      _roleRecords = _roleRecords
-          .map((r) => r.id == updated.id ? updated : r)
-          .toList();
-      _roles = _roles
-          .map((r) => r.id == updated.id ? updated : r)
-          .toList();
+      _roleRecords = _roleRecords.map((r) => r.id == updated.id ? updated : r).toList();
+      _roles = _roles.map((r) => r.id == updated.id ? updated : r).toList();
     });
     await widget.roleRepository.update(updated);
   }
@@ -406,7 +405,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _handleRoleDeleteSelected() async {
     if (_selectedRoleIds.isEmpty) return;
-    final toDelete = _roleRecords.where((r) => r.id != null && _selectedRoleIds.contains(r.id) && r.name != 'super_admin').toList();
+    final toDelete = _roleRecords
+        .where((r) => r.id != null && _selectedRoleIds.contains(r.id) && r.name != 'super_admin')
+        .toList();
     if (toDelete.isEmpty) return;
     final ok = await _confirmDestructive(
       title: '确认批量删除角色',
@@ -420,7 +421,6 @@ class _DashboardPageState extends State<DashboardPage> {
     await _refreshData();
   }
 
-  // Dialogs
   Future<ReportRecord?> _openEditDialog(ReportRecord record, {bool isNew = false}) {
     final titleController = TextEditingController(text: record.title);
     final ownerController = TextEditingController(text: record.owner);
@@ -904,7 +904,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // UI builders
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1061,9 +1060,7 @@ class _DashboardPageState extends State<DashboardPage> {
       radius: 18,
       backgroundColor: Colors.teal.shade300,
       child: Text(
-        widget.currentUsername.isNotEmpty
-            ? widget.currentUsername[0].toUpperCase()
-            : '?',
+        widget.currentUsername.isNotEmpty ? widget.currentUsername[0].toUpperCase() : '?',
         style: const TextStyle(color: Colors.white),
       ),
     );
@@ -1344,125 +1341,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _handleMenuTap(MenuEntry entry) {
-    _openTab(entry);
-  }
-
-  Future<void> _handleSearch() async {
-    _searchTerm = _searchController.text.trim();
-    await _refreshData();
-  }
-
-  Future<void> _handleAccountSearch() async {
-    _accountSearchTerm = _accountSearchController.text.trim();
-    await _refreshData();
-  }
-
-  Future<void> _handleRoleSearch() async {
-    _roleSearchTerm = _roleSearchController.text.trim();
-    await _refreshData();
-  }
-
-  void _openTab(MenuEntry entry) {
-    final exists = _openTabs.any((t) => t.label == entry.label);
-    _ensureTabNavigator(entry.label);
-    _tabResetTokens.putIfAbsent(entry.label, () => 0);
-    setState(() {
-      if (!exists) {
-        _openTabs.add(_OpenTab(label: entry.label, entry: entry));
-      }
-      _selectTab(entry.label, entry: entry, refresh: false);
-    });
-    _ensureDataForCurrentViewIfNeeded();
-  }
-
-  void _selectTab(String label, {MenuEntry? entry, bool refresh = true}) {
-    _ensureTabNavigator(label);
-    _OpenTab target;
-    if (entry != null) {
-      target = _OpenTab(label: entry.label, entry: entry);
-    } else {
-      target = _openTabs.firstWhere(
-        (t) => t.label == label,
-        orElse: () => _OpenTab(label: label),
-      );
-    }
-    _activeTabLabel = target.label;
-    _selectedCategory = target.entry?.category;
-    _selectedMenuLabel = target.label;
-    _accountView = target.entry?.isAccount ?? (_selectedMenuLabel == '账号管理');
-    _roleView = target.entry?.isRole ?? (_selectedMenuLabel == '角色管理');
-    if (refresh) {
-      _refreshData();
-    }
-  }
-
-  void _dismissActiveDialog() {
-    final nav = Navigator.of(context, rootNavigator: true);
-    if (nav.canPop()) {
-      nav.pop();
-    }
-  }
-
-  void _closeTab(String label) {
-    if (_openTabs.length <= 1) return;
-    setState(() {
-      _openTabs.removeWhere((t) => t.label == label);
-      if (_activeTabLabel == label) {
-        final fallback = _openTabs.last;
-        _selectTab(fallback.label, entry: fallback.entry);
-      }
-    });
-  }
-
-  BuildContext get _dialogContext {
-    return _currentTabNavKey.currentContext ?? context;
-  }
-
-  GlobalKey<NavigatorState> get _currentTabNavKey {
-    return _tabNavKeys[_activeTabLabel] ?? _ensureTabNavigator(_activeTabLabel);
-  }
-
-  GlobalKey<NavigatorState> _ensureTabNavigator(String label) {
-    return _tabNavKeys.putIfAbsent(label, () => GlobalKey<NavigatorState>());
-  }
-
-  Future<void> _ensureDataForCurrentViewIfNeeded() async {
-    if (_roleView && !_rolesLoaded) {
-      await _refreshData();
-      return;
-    }
-    if (_accountView && !_accountsLoaded) {
-      await _refreshData();
-      return;
-    }
-    if (!_roleView && !_accountView && !_reportsLoaded) {
-      await _refreshData();
-    }
-  }
-
-  Future<void> _handleTabRefresh(_OpenTab tab) async {
-    setState(() {
-      if (tab.entry?.isRole ?? (tab.label == '角色管理')) {
-        _roleRowsPerPage = 10;
-      } else if (tab.entry?.isAccount ?? (tab.label == '账号管理')) {
-        _accountRowsPerPage = 10;
-      } else {
-        _reportRowsPerPage = 10;
-      }
-      _tabResetTokens[tab.label] = (_tabResetTokens[tab.label] ?? 0) + 1;
-      _loading = true;
-    });
-    if (tab.entry?.isRole ?? (_selectedMenuLabel == '角色管理')) {
-      _rolesLoaded = false;
-    } else if (tab.entry?.isAccount ?? (_selectedMenuLabel == '账号管理')) {
-      _accountsLoaded = false;
-    } else {
-      _reportsLoaded = false;
-    }
-    await _refreshData();
-  }
-
   Widget _buildTabs() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1535,6 +1413,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final key = _ensureTabNavigator(tab.label);
     final isAccount = tab.entry?.isAccount ?? (tab.label == '账号管理');
     final isRole = tab.entry?.isRole ?? (tab.label == '角色管理');
+    final isHome = tab.label == '主页';
     final moduleLabel = tab.label;
     return Navigator(
       key: key,
@@ -1545,8 +1424,10 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildToolbarFor(isAccount: isAccount, isRole: isRole),
-                const SizedBox(height: 12),
+                if (!isHome) ...[
+                  _buildToolbarFor(isAccount: isAccount, isRole: isRole),
+                  const SizedBox(height: 12),
+                ],
                 Expanded(
                   child: Card(
                     clipBehavior: Clip.antiAlias,
@@ -1554,93 +1435,95 @@ class _DashboardPageState extends State<DashboardPage> {
                         ? const Center(child: CircularProgressIndicator())
                         : Padding(
                             padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '当前模块：$moduleLabel（${isRole ? _roleRecords.length : isAccount ? _accounts.length : _records.length} 条记录）',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: isRole
-                                      ? RoleTable(
-                                          roles: _roleRecords,
-                                          rowsPerPage: _roleRowsPerPage,
-                                          resetToken: _tabResetTokens[moduleLabel] ?? 0,
-                                          onRowsPerPageChanged: (value) {
-                                            if (value != null) {
-                                              setState(() {
-                                                _roleRowsPerPage = value;
-                                              });
-                                            }
-                                          },
-                                          selectedIds: _selectedRoleIds,
-                                          onSelectChange: (id, sel) {
-                                            setState(() {
-                                              if (sel) {
-                                                _selectedRoleIds.add(id);
-                                              } else {
-                                                _selectedRoleIds.remove(id);
-                                              }
-                                            });
-                                          },
-                                          onEdit: _handleRoleEdit,
-                                          onDelete: _handleRoleDelete,
-                                          onStatusChange: _handleRoleStatusChange,
-                                        )
-                                      : isAccount
-                                      ? AccountTable(
-                                              accounts: _accounts,
-                                              rowsPerPage: _accountRowsPerPage,
-                                              resetToken: _tabResetTokens[moduleLabel] ?? 0,
-                                              onRowsPerPageChanged: (value) {
-                                                if (value != null) {
-                                                  setState(() {
-                                                    _accountRowsPerPage = value;
-                                                  });
-                                                }
-                                              },
-                                              selectedIds: _selectedAccountIds,
-                                              onSelectChange: (id, sel) {
-                                                setState(() {
-                                                  if (sel) {
-                                                    _selectedAccountIds.add(id);
-                                                  } else {
-                                                    _selectedAccountIds.remove(id);
+                            child: isHome
+                                ? _buildHomeDashboard()
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '当前模块：$moduleLabel（${isRole ? _roleRecords.length : isAccount ? _accounts.length : _records.length} 条记录）',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: isRole
+                                            ? RoleTable(
+                                                roles: _roleRecords,
+                                                rowsPerPage: _roleRowsPerPage,
+                                                resetToken: _tabResetTokens[moduleLabel] ?? 0,
+                                                onRowsPerPageChanged: (value) {
+                                                  if (value != null) {
+                                                    setState(() {
+                                                      _roleRowsPerPage = value;
+                                                    });
                                                   }
-                                                });
-                                              },
-                                              onEdit: _handleAccountEdit,
-                                              onDelete: _handleAccountDelete,
-                                              onStatusChange: _handleAccountStatusChange,
-                                            )
-                                          : ReportTable(
-                                              records: _records,
-                                              rowsPerPage: _reportRowsPerPage,
-                                              onRowsPerPageChanged: (value) {
-                                                if (value != null) {
+                                                },
+                                                selectedIds: _selectedRoleIds,
+                                                onSelectChange: (id, sel) {
                                                   setState(() {
-                                                    _reportRowsPerPage = value;
+                                                    if (sel) {
+                                                      _selectedRoleIds.add(id);
+                                                    } else {
+                                                      _selectedRoleIds.remove(id);
+                                                    }
                                                   });
-                                                }
-                                              },
-                                              selectedIds: _selectedIds,
-                                              onSelectChange: (id, sel) {
-                                                setState(() {
-                                                  if (sel) {
-                                                    _selectedIds.add(id);
-                                                  } else {
-                                                    _selectedIds.remove(id);
-                                                  }
-                                                });
-                                              },
-                                              onEdit: _handleEdit,
-                                              onDelete: _handleDeleteSingle,
-                                            ),
-                                ),
-                              ],
-                            ),
+                                                },
+                                                onEdit: _handleRoleEdit,
+                                                onDelete: _handleRoleDelete,
+                                                onStatusChange: _handleRoleStatusChange,
+                                              )
+                                            : isAccount
+                                                ? AccountTable(
+                                                    accounts: _accounts,
+                                                    rowsPerPage: _accountRowsPerPage,
+                                                    resetToken: _tabResetTokens[moduleLabel] ?? 0,
+                                                    onRowsPerPageChanged: (value) {
+                                                      if (value != null) {
+                                                        setState(() {
+                                                          _accountRowsPerPage = value;
+                                                        });
+                                                      }
+                                                    },
+                                                    selectedIds: _selectedAccountIds,
+                                                    onSelectChange: (id, sel) {
+                                                      setState(() {
+                                                        if (sel) {
+                                                          _selectedAccountIds.add(id);
+                                                        } else {
+                                                          _selectedAccountIds.remove(id);
+                                                        }
+                                                      });
+                                                    },
+                                                    onEdit: _handleAccountEdit,
+                                                    onDelete: _handleAccountDelete,
+                                                    onStatusChange: _handleAccountStatusChange,
+                                                  )
+                                                : ReportTable(
+                                                    records: _records,
+                                                    rowsPerPage: _reportRowsPerPage,
+                                                    onRowsPerPageChanged: (value) {
+                                                      if (value != null) {
+                                                        setState(() {
+                                                          _reportRowsPerPage = value;
+                                                        });
+                                                      }
+                                                    },
+                                                    selectedIds: _selectedIds,
+                                                    onSelectChange: (id, sel) {
+                                                      setState(() {
+                                                        if (sel) {
+                                                          _selectedIds.add(id);
+                                                        } else {
+                                                          _selectedIds.remove(id);
+                                                        }
+                                                      });
+                                                    },
+                                                    onEdit: _handleEdit,
+                                                    onDelete: _handleDeleteSingle,
+                                                  ),
+                                      ),
+                                    ],
+                                  ),
                           ),
                   ),
                 ),
@@ -1702,7 +1585,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('消息中心', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                    const Text('消息中心',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                     IconButton(
                       onPressed: () {
                         setState(() {
@@ -1748,6 +1632,437 @@ class _DashboardPageState extends State<DashboardPage> {
     final date = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
     final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     return '$date $time';
+  }
+
+  Widget _buildHomeDashboard() {
+    const double cardWidth = 520;
+    const double maxCardWidth = 600;
+    final chartCards = [
+      _chartCard(title: '销量趋势', child: _buildLineChart(), width: cardWidth, maxWidth: maxCardWidth),
+      _chartCard(title: '品类占比', child: _buildPieChart(), width: cardWidth, maxWidth: maxCardWidth),
+      _chartCard(title: '区域分布', child: _buildBarChart(), width: cardWidth, maxWidth: maxCardWidth),
+      _chartCard(title: '层级关系', child: _buildGroupedBar(), width: cardWidth, maxWidth: maxCardWidth),
+      _chartCard(title: '天气情况', child: _buildWeatherChart(), width: cardWidth, maxWidth: maxCardWidth),
+    ];
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _homeMessageList(width: cardWidth, maxWidth: maxCardWidth),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: chartCards,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chartCard({
+    required String title,
+    required Widget child,
+    double height = 260,
+    double width = 520,
+    double maxWidth = 600,
+  }) {
+    return Container(
+      width: width,
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: height,
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _homeMessageList({double width = 520, double maxWidth = 600}) {
+    final sorted = [..._messages]..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    return Container(
+      width: width,
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            color: Colors.white,
+            child: const Text('最新消息', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: sorted.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final msg = sorted[index];
+              return ListTile(
+                title: Text(msg.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(msg.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${msg.author} · ${_formatDateTime(msg.publishedAt)}',
+                      style: const TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  LineChart _buildLineChart() {
+    final spots = <FlSpot>[
+      const FlSpot(0, 12),
+      const FlSpot(1, 20),
+      const FlSpot(2, 15),
+      const FlSpot(3, 8),
+      const FlSpot(4, 7),
+      const FlSpot(5, 11),
+      const FlSpot(6, 13),
+    ];
+    final maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) * 1.2;
+    return LineChart(
+      LineChartData(
+        minY: 0,
+        maxY: maxY,
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                return Text(labels[value.toInt().clamp(0, 6)]);
+              },
+              reservedSize: 32,
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(showTitles: true, reservedSize: 48),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: FlGridData(show: true),
+        lineBarsData: [
+          LineChartBarData(
+            isCurved: true,
+            color: const Color(0xFF0052D9),
+            barWidth: 3,
+            belowBarData: BarAreaData(
+              show: true,
+              color: const Color(0xFF0052D9).withOpacity(0.2),
+            ),
+            spots: spots,
+          ),
+        ],
+      ),
+    );
+  }
+
+  BarChart _buildBarChart() {
+    final data = [320.0, 260, 180, 140, 90];
+    final labels = ['华北', '华东', '华南', '西南', '东北'];
+    final maxY = data.reduce((a, b) => a > b ? a : b) * 1.2;
+    return BarChart(
+      BarChartData(
+        maxY: maxY,
+        minY: 0,
+        alignment: BarChartAlignment.spaceAround,
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                final idx = value.toInt();
+                if (idx < 0 || idx >= labels.length) return const SizedBox.shrink();
+                return Text(labels[idx]);
+              },
+              reservedSize: 32,
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(showTitles: true, reservedSize: 48),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        barGroups: List.generate(
+          data.length,
+          (i) => BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: data[i].toDouble(),
+                color: const Color(0xFF0052D9),
+                width: 18,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  BarChart _buildGroupedBar() {
+    final regions = ['华北', '华东', '华南'];
+    final teamA = [120.0, 150, 110];
+    final teamB = [100.0, 130, 90];
+    final maxY = math.max(teamA.reduce((a, b) => a > b ? a : b), teamB.reduce((a, b) => a > b ? a : b)) * 1.2;
+    return BarChart(
+      BarChartData(
+        maxY: maxY,
+        minY: 0,
+        barGroups: List.generate(regions.length, (i) {
+          return BarChartGroupData(
+            x: i,
+            barsSpace: 6,
+            barRods: [
+              BarChartRodData(
+                toY: teamA[i].toDouble(),
+                color: const Color(0xFF0052D9),
+                width: 12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+              BarChartRodData(
+                toY: teamB[i].toDouble(),
+                color: Colors.orange,
+                width: 12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ],
+          );
+        }),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                final idx = value.toInt();
+                if (idx < 0 || idx >= regions.length) return const SizedBox.shrink();
+                return Text(regions[idx]);
+              },
+              reservedSize: 32,
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(showTitles: true, reservedSize: 48),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+      ),
+    );
+  }
+
+  PieChart _buildPieChart() {
+    final sections = [
+      PieChartSectionData(value: 1048, title: '家电', color: const Color(0xFF0052D9)),
+      PieChartSectionData(value: 735, title: '数码', color: Colors.orange),
+      PieChartSectionData(value: 580, title: '服饰', color: Colors.green),
+      PieChartSectionData(value: 484, title: '美妆', color: Colors.purple),
+      PieChartSectionData(value: 300, title: '其他', color: Colors.grey),
+    ];
+    return PieChart(
+      PieChartData(
+        sections: sections,
+        sectionsSpace: 2,
+        centerSpaceRadius: 28,
+      ),
+    );
+  }
+
+  LineChart _buildWeatherChart() {
+    final high = [11.0, 11, 15, 13, 12, 13, 10];
+    final low = [1.0, -2, 2, 5, 3, 2, 0];
+    List<FlSpot> mapList(List<num> vals) =>
+        List.generate(vals.length, (i) => FlSpot(i.toDouble(), vals[i].toDouble()));
+    final maxY = (high.reduce((a, b) => a > b ? a : b)) * 1.3;
+    final minY = (low.reduce((a, b) => a < b ? a : b)) - 2;
+    return LineChart(
+      LineChartData(
+        minY: minY.toDouble(),
+        maxY: maxY,
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                final idx = value.toInt();
+                if (idx < 0 || idx >= labels.length) return const SizedBox.shrink();
+                return Text(labels[idx]);
+              },
+              reservedSize: 32,
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(showTitles: true, reservedSize: 48),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            isCurved: true,
+            color: const Color(0xFF0052D9),
+            barWidth: 3,
+            belowBarData: BarAreaData(show: true, color: const Color(0xFF0052D9).withOpacity(0.15)),
+            spots: mapList(high),
+          ),
+          LineChartBarData(
+            isCurved: true,
+            color: Colors.orange,
+            barWidth: 3,
+            belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.12)),
+            spots: mapList(low),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Navigation / data helpers
+  Future<void> _ensureDataForCurrentViewIfNeeded() async {
+    if (_roleView && !_rolesLoaded) {
+      await _refreshData();
+      return;
+    }
+    if (_accountView && !_accountsLoaded) {
+      await _refreshData();
+      return;
+    }
+    if (!_roleView && !_accountView && !_reportsLoaded) {
+      await _refreshData();
+    }
+  }
+
+  void _handleMenuTap(MenuEntry entry) {
+    _openTab(entry);
+  }
+
+  Future<void> _handleSearch() async {
+    _searchTerm = _searchController.text.trim();
+    await _refreshData();
+  }
+
+  Future<void> _handleAccountSearch() async {
+    _accountSearchTerm = _accountSearchController.text.trim();
+    await _refreshData();
+  }
+
+  Future<void> _handleRoleSearch() async {
+    _roleSearchTerm = _roleSearchController.text.trim();
+    await _refreshData();
+  }
+
+  void _openTab(MenuEntry entry) {
+    final exists = _openTabs.any((t) => t.label == entry.label);
+    _ensureTabNavigator(entry.label);
+    _tabResetTokens.putIfAbsent(entry.label, () => 0);
+    setState(() {
+      if (!exists) {
+        _openTabs.add(_OpenTab(label: entry.label, entry: entry));
+      }
+      _selectTab(entry.label, entry: entry, refresh: false);
+    });
+    _ensureDataForCurrentViewIfNeeded();
+  }
+
+  void _selectTab(String label, {MenuEntry? entry, bool refresh = true}) {
+    _ensureTabNavigator(label);
+    _OpenTab target;
+    if (entry != null) {
+      target = _OpenTab(label: entry.label, entry: entry);
+    } else {
+      target = _openTabs.firstWhere(
+        (t) => t.label == label,
+        orElse: () => _OpenTab(label: label),
+      );
+    }
+    _activeTabLabel = target.label;
+    _selectedCategory = target.entry?.category;
+    _selectedMenuLabel = target.label;
+    _accountView = target.entry?.isAccount ?? (_selectedMenuLabel == '账号管理');
+    _roleView = target.entry?.isRole ?? (_selectedMenuLabel == '角色管理');
+    if (refresh) {
+      _refreshData();
+    }
+  }
+
+  void _closeTab(String label) {
+    if (_openTabs.length <= 1) return;
+    setState(() {
+      _openTabs.removeWhere((t) => t.label == label);
+      if (_activeTabLabel == label) {
+        final fallback = _openTabs.last;
+        _selectTab(fallback.label, entry: fallback.entry);
+      }
+    });
+  }
+
+  Future<void> _handleTabRefresh(_OpenTab tab) async {
+    setState(() {
+      if (tab.entry?.isRole ?? (tab.label == '角色管理')) {
+        _roleRowsPerPage = 10;
+      } else if (tab.entry?.isAccount ?? (tab.label == '账号管理')) {
+        _accountRowsPerPage = 10;
+      } else {
+        _reportRowsPerPage = 10;
+      }
+      _tabResetTokens[tab.label] = (_tabResetTokens[tab.label] ?? 0) + 1;
+      _loading = true;
+    });
+    if (tab.entry?.isRole ?? (_selectedMenuLabel == '角色管理')) {
+      _rolesLoaded = false;
+    } else if (tab.entry?.isAccount ?? (_selectedMenuLabel == '账号管理')) {
+      _accountsLoaded = false;
+    } else {
+      _reportsLoaded = false;
+    }
+    await _refreshData();
+  }
+
+  BuildContext get _dialogContext {
+    return _currentTabNavKey.currentContext ?? context;
+  }
+
+  GlobalKey<NavigatorState> get _currentTabNavKey {
+    return _tabNavKeys[_activeTabLabel] ?? _ensureTabNavigator(_activeTabLabel);
+  }
+
+  GlobalKey<NavigatorState> _ensureTabNavigator(String label) {
+    return _tabNavKeys.putIfAbsent(label, () => GlobalKey<NavigatorState>());
   }
 }
 
