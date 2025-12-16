@@ -74,6 +74,27 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _accountsLoaded = false;
   bool _rolesLoaded = false;
   final Map<String, int> _tabResetTokens = {};
+  bool _showMessageDrawer = false;
+  final List<_Message> _messages = [
+    _Message(
+      title: '系统更新',
+      content: '后台管理系统已更新至最新版本，包含安全修复与性能优化。',
+      author: '系统',
+      publishedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+    ),
+    _Message(
+      title: '权限提醒',
+      content: '请确认角色权限配置，避免未授权访问。',
+      author: '安全中心',
+      publishedAt: DateTime.now().subtract(const Duration(hours: 2)),
+    ),
+    _Message(
+      title: '公告',
+      content: '本周五晚进行维护，届时可能短暂不可用。',
+      author: '运维',
+      publishedAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
+    ),
+  ];
 
   final List<MenuEntry> _menuEntries = [
     MenuEntry(
@@ -870,7 +891,14 @@ class _DashboardPageState extends State<DashboardPage> {
                         height: 1,
                         color: Colors.grey.shade300,
                       ),
-                      Expanded(child: _buildTabContentStack()),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            _buildTabContentStack(),
+                            if (_showMessageDrawer) _buildMessageDrawer(),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -920,7 +948,11 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Row(
               children: [
                 TextButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    setState(() {
+                      _showMessageDrawer = true;
+                    });
+                  },
                   icon: const Icon(Icons.notifications_none, size: 18),
                   label: const Text('消息中心'),
                   style: TextButton.styleFrom(
@@ -1394,9 +1426,6 @@ class _DashboardPageState extends State<DashboardPage> {
       _reportsLoaded = false;
     }
     await _refreshData();
-    // Ensure dialog state is cleared in this tab
-    final key = _ensureTabNavigator(tab.label);
-    key.currentState?.popUntil((route) => route.isFirst);
   }
 
   Widget _buildTabs() {
@@ -1593,12 +1622,93 @@ class _DashboardPageState extends State<DashboardPage> {
     if (isAccount) return _buildAccountToolbar();
     return _buildToolbar();
   }
+
+  Widget _buildMessageDrawer() {
+    final sorted = [..._messages]..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    return Align(
+      alignment: Alignment.centerRight,
+      child: SizedBox(
+        width: 360,
+        child: Card(
+          margin: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          elevation: 8,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                color: _accentColor,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('消息中心', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showMessageDrawer = false;
+                        });
+                      },
+                      icon: const Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: sorted.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final msg = sorted[index];
+                    return ListTile(
+                      title: Text(msg.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(msg.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${msg.author} · ${_formatDateTime(msg.publishedAt)}',
+                            style: const TextStyle(color: Colors.black54, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final date = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return '$date $time';
+  }
 }
 
 class _OpenTab {
   _OpenTab({required this.label, this.entry});
   final String label;
   final MenuEntry? entry;
+}
+
+class _Message {
+  const _Message({
+    required this.title,
+    required this.content,
+    required this.author,
+    required this.publishedAt,
+  });
+
+  final String title;
+  final String content;
+  final String author;
+  final DateTime publishedAt;
 }
 
 class MenuEntry {
