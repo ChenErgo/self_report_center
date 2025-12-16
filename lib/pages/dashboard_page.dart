@@ -325,6 +325,11 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _handleAccountDelete(AccountRecord record) async {
     if (record.username == 'superchenergou') return;
     if (record.id == null) return;
+    final ok = await _confirmDestructive(
+      title: '确认删除账号',
+      content: '确定删除账号 ${record.username} 吗？此操作不可恢复。',
+    );
+    if (!ok) return;
     await widget.accountRepository.deleteOne(record.id!);
     await _refreshData();
   }
@@ -333,6 +338,11 @@ class _DashboardPageState extends State<DashboardPage> {
     if (_selectedAccountIds.isEmpty) return;
     final filtered = _accounts.where((e) => e.username != 'superchenergou' && e.id != null && _selectedAccountIds.contains(e.id)).map((e) => e.id!).toSet();
     if (filtered.isEmpty) return;
+    final ok = await _confirmDestructive(
+      title: '确认批量删除账号',
+      content: '确定删除选中的 ${filtered.length} 个账号吗？此操作不可恢复。',
+    );
+    if (!ok) return;
     await widget.accountRepository.deleteMany(filtered);
     await _refreshData();
   }
@@ -384,6 +394,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _handleRoleDelete(RoleRecord role) async {
     if (role.name == 'super_admin' || role.id == null) return;
+    final ok = await _confirmDestructive(
+      title: '确认删除角色',
+      content: '确定删除角色 ${role.name} 吗？此操作不可恢复。',
+    );
+    if (!ok) return;
     await widget.roleRepository.delete(role.id!);
     await _loadRolesAndPermissions();
     await _refreshData();
@@ -392,6 +407,12 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _handleRoleDeleteSelected() async {
     if (_selectedRoleIds.isEmpty) return;
     final toDelete = _roleRecords.where((r) => r.id != null && _selectedRoleIds.contains(r.id) && r.name != 'super_admin').toList();
+    if (toDelete.isEmpty) return;
+    final ok = await _confirmDestructive(
+      title: '确认批量删除角色',
+      content: '确定删除选中的 ${toDelete.length} 个角色吗？此操作不可恢复。',
+    );
+    if (!ok) return;
     for (final r in toDelete) {
       await widget.roleRepository.delete(r.id!);
     }
@@ -644,8 +665,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('取消')),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: Text('取消', style: TextStyle(color: _accentColor)),
+                ),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () {
                     final username = usernameController.text.trim();
                     if (username.isEmpty) {
@@ -840,8 +868,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('取消')),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  child: Text('取消', style: TextStyle(color: _accentColor)),
+                ),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () {
                     if (nameController.text.trim().isEmpty) {
                       setStateDialog(() {
@@ -1623,6 +1658,31 @@ class _DashboardPageState extends State<DashboardPage> {
     return _buildToolbar();
   }
 
+  Future<bool> _confirmDestructive({required String title, required String content}) async {
+    final result = await showDialog<bool>(
+      context: _dialogContext,
+      useRootNavigator: false,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('取消', style: TextStyle(color: _accentColor)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('确认', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
   Widget _buildMessageDrawer() {
     final sorted = [..._messages]..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
     return Align(
@@ -1769,6 +1829,7 @@ class _AvatarPicker extends StatefulWidget {
 class _AvatarPickerState extends State<_AvatarPicker> {
   String? _path;
   final ImagePicker _imagePicker = ImagePicker();
+  static const Color _pickerAccent = Color(0xFF0052D9);
 
   @override
   void initState() {
@@ -1813,7 +1874,15 @@ class _AvatarPickerState extends State<_AvatarPicker> {
               : const Icon(Icons.person, size: 32, color: Colors.grey),
         ),
         const SizedBox(width: 12),
-        OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.upload), label: const Text('选择图片')),
+        OutlinedButton.icon(
+          onPressed: _pick,
+          icon: const Icon(Icons.upload, color: _pickerAccent),
+          label: const Text('选择图片', style: TextStyle(color: _pickerAccent)),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: _pickerAccent),
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          ),
+        ),
       ],
     );
   }
