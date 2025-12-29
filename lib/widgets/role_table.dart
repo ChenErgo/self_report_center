@@ -128,9 +128,25 @@ class _RoleTableState extends State<RoleTable> {
                 TDTableCol(
                   title: '描述',
                   colKey: 'description',
-                  ellipsis: true,
                   width: 260,
                   align: TDTableColAlign.center,
+                  cellBuilder: (_, index) {
+                    final record = _recordAt(tableData, index);
+                    if (record == null) return const SizedBox.shrink();
+                    final text = record.description;
+                    return Tooltip(
+                      message: text.isEmpty ? '无描述' : text,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 TDTableCol(
                   title: '权限',

@@ -2,6 +2,9 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:faker/faker.dart' as fk;
+import 'package:excel/excel.dart' as xls;
+import 'package:file_selector/file_selector.dart' as fsel;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
@@ -54,6 +57,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final fk.Faker _faker = fk.Faker();
 
   bool _loading = true;
+  bool _exporting = false;
   int _reportRowsPerPage = 10;
   int _accountRowsPerPage = 10;
   int _roleRowsPerPage = 10;
@@ -64,8 +68,12 @@ class _DashboardPageState extends State<DashboardPage> {
   String _selectedMenuLabel = '主页';
   bool _accountView = false;
   bool _roleView = false;
+  bool _permissionView = false;
   bool _isSuperAdmin = false;
   Set<String> _currentPermissions = {};
+  final Map<String, MenuPermission> _permissionMap = {
+    for (final perm in kMenuPermissions) perm.key: perm,
+  };
   List<ReportRecord> _records = [];
   List<AccountRecord> _accounts = [];
   List<RoleRecord> _roles = [];
@@ -176,6 +184,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _refreshData() async {
     setState(() => _loading = true);
+    if (_permissionView) {
+      setState(() {
+        _loading = false;
+      });
+      return;
+    }
     if (_roleView) {
       await _refreshRoles();
       setState(() {
@@ -298,6 +312,138 @@ class _DashboardPageState extends State<DashboardPage> {
     if (_selectedIds.isEmpty) return;
     await widget.reportRepository.deleteMany(_selectedIds);
     await _refreshData();
+  }
+
+  Future<void> _handleExportReports() async {
+    if (_records.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('暂无可导出的数据')));
+      }
+      return;
+    }
+    final exportRecords = _selectedIds.isNotEmpty
+        ? _records.where((r) => r.id != null && _selectedIds.contains(r.id)).toList()
+        : _records;
+    if (exportRecords.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('没有可导出的选中数据')));
+      }
+      return;
+    }
+    setState(() {
+      _exporting = true;
+    });
+    try {
+      final excel = xls.Excel.createExcel();
+      final firstSheetName = excel.tables.keys.first;
+      final sheet = excel[firstSheetName];
+      sheet.appendRow([
+        'ID',
+        '标题',
+        '负责人',
+        '部门',
+        '状态',
+        '优先级',
+        '分类',
+        '子分类',
+        '区域',
+        '平台',
+        '版本',
+        '严重级别',
+        '设备ID',
+        '操作系统',
+        '城市',
+        '国家',
+        '联系邮箱',
+        '联系电话',
+        '标签',
+        '更新时间',
+      ]);
+      for (final record in exportRecords) {
+        sheet.appendRow([
+          record.id ?? '-',
+          record.title,
+          record.owner,
+          record.department,
+          record.status,
+          record.priority,
+          record.category,
+          record.subcategory,
+          record.region,
+          record.platform,
+          record.version,
+          record.severity,
+          record.deviceId,
+          record.os,
+          record.city,
+          record.country,
+          record.contactEmail,
+          record.contactPhone,
+          record.tags,
+          record.updatedAt.replaceFirst('T', ' ').split('.').first,
+        ]);
+      }
+      final bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('生成 Excel 失败');
+      }
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final fileName = 'data_overview_$timestamp.xlsx';
+      debugPrint('导出 Excel 开始生成保存路径...');
+      final savePath = await _pickExportPath(fileName).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          debugPrint('选择导出路径超时');
+          return null;
+        },
+      );
+      debugPrint('导出 Excel 保存路径: $savePath');
+      if (savePath == null || savePath.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已取消导出')));
+        }
+        return;
+      }
+      final file = File(savePath);
+      await file.create(recursive: true);
+      await file.writeAsBytes(bytes, flush: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已导出到 ${file.path}')),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('导出 Excel 失败: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导出失败: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exporting = false;
+        });
+      }
+    }
+  }
+
+  Future<String?> _pickExportPath(String suggestedName) async {
+    try {
+      debugPrint('调用保存对话框，建议文件名: $suggestedName');
+      final location = await fsel.getSaveLocation(
+        suggestedName: suggestedName,
+        acceptedTypeGroups: const [
+          fsel.XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+        ],
+      );
+      debugPrint('保存对话框返回路径: ${location?.path}');
+      final path = location?.path;
+      if (path == null || path.isEmpty) return null;
+      if (path.toLowerCase().endsWith('.xlsx')) return path;
+      return '$path.xlsx';
+    } catch (e, st) {
+      debugPrint('选择导出路径失败: $e\n$st');
+      return null;
+    }
   }
 
   Future<void> _handleAccountAdd() async {
@@ -823,25 +969,29 @@ class _DashboardPageState extends State<DashboardPage> {
                                     runSpacing: 8,
                                     children: kMenuPermissions.map((perm) {
                                       final checked = selectedPerms.contains(perm.key);
+                                      final fullText = '${perm.label}（${perm.description}）';
                                       return SizedBox(
                                         width: itemWidth,
-                                        child: TDCheckbox(
-                                          id: 'perm-${perm.key}',
-                                          title: perm.label,
-                                          checked: checked,
-                                          enable: existing?.name != 'super_admin',
-                                          style: TDCheckboxStyle.square,
-                                          size: TDCheckBoxSize.small,
-                                          backgroundColor: Colors.transparent,
-                                          onCheckBoxChanged: (val) {
-                                            setStateDialog(() {
-                                              if (val) {
-                                                selectedPerms.add(perm.key);
-                                              } else {
-                                                selectedPerms.remove(perm.key);
-                                              }
-                                            });
-                                          },
+                                        child: Tooltip(
+                                          message: fullText,
+                                          child: TDCheckbox(
+                                            id: 'perm-${perm.key}',
+                                            title: perm.label,
+                                            checked: checked,
+                                            enable: existing?.name != 'super_admin',
+                                            style: TDCheckboxStyle.square,
+                                            size: TDCheckBoxSize.small,
+                                            backgroundColor: Colors.transparent,
+                                            onCheckBoxChanged: (val) {
+                                              setStateDialog(() {
+                                                if (val) {
+                                                  selectedPerms.add(perm.key);
+                                                } else {
+                                                  selectedPerms.remove(perm.key);
+                                                }
+                                              });
+                                            },
+                                          ),
                                         ),
                                       );
                                     }).toList(),
@@ -1177,6 +1327,18 @@ class _DashboardPageState extends State<DashboardPage> {
           label: Text('批量删除 (${_selectedIds.length})'),
         ),
         const SizedBox(width: 8),
+        OutlinedButton.icon(
+          onPressed: _records.isEmpty || _exporting ? null : _handleExportReports,
+          icon: _exporting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download),
+          label: Text(_exporting ? '导出中...' : '导出 Excel'),
+        ),
+        const SizedBox(width: 8),
         FilledButton.icon(onPressed: _handleAdd, icon: const Icon(Icons.add), label: const Text('新增')),
         const Spacer(),
         Text('分页：每页 $_reportRowsPerPage 条 | 共 ${_records.length} 条', style: const TextStyle(color: Colors.black54)),
@@ -1414,6 +1576,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final isAccount = tab.entry?.isAccount ?? (tab.label == '账号管理');
     final isRole = tab.entry?.isRole ?? (tab.label == '角色管理');
     final isHome = tab.label == '主页';
+    final isPermission = tab.entry?.permissionKey == 'settings_permission' || tab.label == '权限';
     final moduleLabel = tab.label;
     return Navigator(
       key: key,
@@ -1424,7 +1587,7 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!isHome) ...[
+                if (!isHome && !isPermission) ...[
                   _buildToolbarFor(isAccount: isAccount, isRole: isRole),
                   const SizedBox(height: 12),
                 ],
@@ -1437,93 +1600,95 @@ class _DashboardPageState extends State<DashboardPage> {
                             padding: const EdgeInsets.all(12),
                             child: isHome
                                 ? _buildHomeDashboard()
-                                : Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '当前模块：$moduleLabel（${isRole ? _roleRecords.length : isAccount ? _accounts.length : _records.length} 条记录）',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Expanded(
-                                        child: isRole
-                                            ? RoleTable(
-                                                roles: _roleRecords,
-                                                rowsPerPage: _roleRowsPerPage,
-                                                resetToken: _tabResetTokens[moduleLabel] ?? 0,
-                                                onRowsPerPageChanged: (value) {
-                                                  if (value != null) {
-                                                    setState(() {
-                                                      _roleRowsPerPage = value;
-                                                    });
-                                                  }
-                                                },
-                                                selectedIds: _selectedRoleIds,
-                                                onSelectChange: (id, sel) {
-                                                  setState(() {
-                                                    if (sel) {
-                                                      _selectedRoleIds.add(id);
-                                                    } else {
-                                                      _selectedRoleIds.remove(id);
-                                                    }
-                                                  });
-                                                },
-                                                onEdit: _handleRoleEdit,
-                                                onDelete: _handleRoleDelete,
-                                                onStatusChange: _handleRoleStatusChange,
-                                              )
-                                            : isAccount
-                                                ? AccountTable(
-                                                    accounts: _accounts,
-                                                    rowsPerPage: _accountRowsPerPage,
+                                : isPermission
+                                    ? _buildPermissionModule(moduleLabel)
+                                    : Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '当前模块：$moduleLabel（${isRole ? _roleRecords.length : isAccount ? _accounts.length : _records.length} 条记录）',
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Expanded(
+                                            child: isRole
+                                                ? RoleTable(
+                                                    roles: _roleRecords,
+                                                    rowsPerPage: _roleRowsPerPage,
                                                     resetToken: _tabResetTokens[moduleLabel] ?? 0,
                                                     onRowsPerPageChanged: (value) {
                                                       if (value != null) {
                                                         setState(() {
-                                                          _accountRowsPerPage = value;
+                                                          _roleRowsPerPage = value;
                                                         });
                                                       }
                                                     },
-                                                    selectedIds: _selectedAccountIds,
+                                                    selectedIds: _selectedRoleIds,
                                                     onSelectChange: (id, sel) {
                                                       setState(() {
                                                         if (sel) {
-                                                          _selectedAccountIds.add(id);
+                                                          _selectedRoleIds.add(id);
                                                         } else {
-                                                          _selectedAccountIds.remove(id);
+                                                          _selectedRoleIds.remove(id);
                                                         }
                                                       });
                                                     },
-                                                    onEdit: _handleAccountEdit,
-                                                    onDelete: _handleAccountDelete,
-                                                    onStatusChange: _handleAccountStatusChange,
+                                                    onEdit: _handleRoleEdit,
+                                                    onDelete: _handleRoleDelete,
+                                                    onStatusChange: _handleRoleStatusChange,
                                                   )
-                                                : ReportTable(
-                                                    records: _records,
-                                                    rowsPerPage: _reportRowsPerPage,
-                                                    onRowsPerPageChanged: (value) {
-                                                      if (value != null) {
-                                                        setState(() {
-                                                          _reportRowsPerPage = value;
-                                                        });
-                                                      }
-                                                    },
-                                                    selectedIds: _selectedIds,
-                                                    onSelectChange: (id, sel) {
-                                                      setState(() {
-                                                        if (sel) {
-                                                          _selectedIds.add(id);
-                                                        } else {
-                                                          _selectedIds.remove(id);
-                                                        }
-                                                      });
-                                                    },
-                                                    onEdit: _handleEdit,
-                                                    onDelete: _handleDeleteSingle,
-                                                  ),
+                                                : isAccount
+                                                    ? AccountTable(
+                                                        accounts: _accounts,
+                                                        rowsPerPage: _accountRowsPerPage,
+                                                        resetToken: _tabResetTokens[moduleLabel] ?? 0,
+                                                        onRowsPerPageChanged: (value) {
+                                                          if (value != null) {
+                                                            setState(() {
+                                                              _accountRowsPerPage = value;
+                                                            });
+                                                          }
+                                                        },
+                                                        selectedIds: _selectedAccountIds,
+                                                        onSelectChange: (id, sel) {
+                                                          setState(() {
+                                                            if (sel) {
+                                                              _selectedAccountIds.add(id);
+                                                            } else {
+                                                              _selectedAccountIds.remove(id);
+                                                            }
+                                                          });
+                                                        },
+                                                        onEdit: _handleAccountEdit,
+                                                        onDelete: _handleAccountDelete,
+                                                        onStatusChange: _handleAccountStatusChange,
+                                                      )
+                                                    : ReportTable(
+                                                        records: _records,
+                                                        rowsPerPage: _reportRowsPerPage,
+                                                        onRowsPerPageChanged: (value) {
+                                                          if (value != null) {
+                                                            setState(() {
+                                                              _reportRowsPerPage = value;
+                                                            });
+                                                          }
+                                                        },
+                                                        selectedIds: _selectedIds,
+                                                        onSelectChange: (id, sel) {
+                                                          setState(() {
+                                                            if (sel) {
+                                                              _selectedIds.add(id);
+                                                            } else {
+                                                              _selectedIds.remove(id);
+                                                            }
+                                                          });
+                                                        },
+                                                        onEdit: _handleEdit,
+                                                        onDelete: _handleDeleteSingle,
+                                                      ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
                           ),
                   ),
                 ),
@@ -1532,6 +1697,116 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPermissionModule(String moduleLabel) {
+    final total = kMenuPermissions.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '当前模块：$moduleLabel（$total 个菜单权限）',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Expanded(child: _buildPermissionTree()),
+      ],
+    );
+  }
+
+  Widget _buildPermissionTree() {
+    return ListView(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            border: Border.all(color: Colors.blue.shade100),
+          ),
+          child: const Text(
+            '展示所有菜单权限的树形结构，可折叠查看，包含权限标识与描述。',
+            style: TextStyle(color: Color(0xFF0052D9)),
+          ),
+        ),
+        ..._menuEntries.map((entry) => _buildPermissionNode(entry)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildPermissionNode(MenuEntry entry, {int depth = 0}) {
+    final perm = entry.permissionKey != null ? _permissionMap[entry.permissionKey] : null;
+    final hasChildren = entry.children.isNotEmpty;
+    final description = perm?.description ?? (hasChildren ? '包含下级菜单' : '未配置权限标识');
+    final title = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(entry.icon, size: 18, color: Colors.grey.shade700),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(entry.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Tooltip(
+                message: description,
+                child: Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (perm != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Text(
+              'Key: ${perm.key}',
+              style: const TextStyle(color: _accentColor, fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+          ),
+      ],
+    );
+
+    final nodePadding = EdgeInsets.only(left: depth * 16.0, bottom: 10);
+    if (!hasChildren) {
+      return Padding(
+        padding: nodePadding,
+        child: Card(
+          margin: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: title,
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: nodePadding,
+      child: Card(
+        margin: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            childrenPadding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+            title: title,
+            children: entry.children.map((child) => _buildPermissionNode(child, depth: depth + 1)).toList(),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1962,7 +2237,7 @@ class _DashboardPageState extends State<DashboardPage> {
       await _refreshData();
       return;
     }
-    if (!_roleView && !_accountView && !_reportsLoaded) {
+    if (!_roleView && !_accountView && !_permissionView && !_reportsLoaded) {
       await _refreshData();
     }
   }
@@ -2015,6 +2290,8 @@ class _DashboardPageState extends State<DashboardPage> {
     _selectedMenuLabel = target.label;
     _accountView = target.entry?.isAccount ?? (_selectedMenuLabel == '账号管理');
     _roleView = target.entry?.isRole ?? (_selectedMenuLabel == '角色管理');
+    _permissionView =
+        target.entry?.permissionKey == 'settings_permission' || (_selectedMenuLabel == '权限');
     if (refresh) {
       _refreshData();
     }
@@ -2032,10 +2309,20 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _handleTabRefresh(_OpenTab tab) async {
+    final isRoleTab = tab.entry?.isRole ?? (tab.label == '角色管理');
+    final isAccountTab = tab.entry?.isAccount ?? (tab.label == '账号管理');
+    final isPermissionTab = tab.entry?.permissionKey == 'settings_permission' || tab.label == '权限';
+    if (isPermissionTab) {
+      setState(() {
+        _tabResetTokens[tab.label] = (_tabResetTokens[tab.label] ?? 0) + 1;
+        _loading = false;
+      });
+      return;
+    }
     setState(() {
-      if (tab.entry?.isRole ?? (tab.label == '角色管理')) {
+      if (isRoleTab) {
         _roleRowsPerPage = 10;
-      } else if (tab.entry?.isAccount ?? (tab.label == '账号管理')) {
+      } else if (isAccountTab) {
         _accountRowsPerPage = 10;
       } else {
         _reportRowsPerPage = 10;
@@ -2043,9 +2330,9 @@ class _DashboardPageState extends State<DashboardPage> {
       _tabResetTokens[tab.label] = (_tabResetTokens[tab.label] ?? 0) + 1;
       _loading = true;
     });
-    if (tab.entry?.isRole ?? (_selectedMenuLabel == '角色管理')) {
+    if (isRoleTab) {
       _rolesLoaded = false;
-    } else if (tab.entry?.isAccount ?? (_selectedMenuLabel == '账号管理')) {
+    } else if (isAccountTab) {
       _accountsLoaded = false;
     } else {
       _reportsLoaded = false;

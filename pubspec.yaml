@@ -48,6 +48,8 @@ dependencies:
   image_picker: ^1.1.2
   path_provider: ^2.1.2
   shared_preferences: ^2.2.3
+  excel: ^2.1.0
+  file_selector: ^1.0.3
 
 dev_dependencies:
   flutter_test:
