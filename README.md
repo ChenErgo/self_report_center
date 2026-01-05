@@ -1,18 +1,288 @@
-# self_report_center
+# Self Report Center
 
-一个报表中心的APP
+一个基于 Flutter 开发的桌面端报表中心管理系统，提供数据概览、报表管理、账号权限控制等功能。
 
-## Getting Started
+## 项目简介
 
-codex resume 019b2054-408a-77f0-abb0-f0714fbef551
+Self Report Center 是一款专为桌面环境设计的管理后台系统，支持 Windows、macOS 和 Linux 平台。系统采用 Material Design 3 设计规范，提供简洁直观的用户界面和完善的权限管理机制。
 
-This project is a starting point for a Flutter application.
+### 主要特性
 
-A few resources to get you started if this is your first Flutter project:
+- **多平台支持**：支持 Windows、macOS、Linux 等桌面系统
+- **权限管理**：基于角色的访问控制（RBAC），支持细粒度权限配置
+- **数据管理**：支持报表数据的增删改查、搜索和批量操作
+- **数据导出**：支持将报表数据导出为 Excel 格式
+- **安全认证**：密码加密存储（BCrypt），验证码登录机制
+- **本地存储**：使用 SQLite 数据库，数据完全本地化
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## 技术栈
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **框架**：Flutter 3.10.3+
+- **UI 组件**：TDesign Flutter、Material Design 3
+- **数据可视化**：fl_chart、flutter_echarts
+- **数据库**：SQLite (sqflite_common_ffi)
+- **密码加密**：bcrypt
+- **Excel 导出**：excel
+- **其他依赖**：
+  - faker：生成测试数据
+  - image_picker：头像选择
+  - path_provider：文件路径管理
+  - shared_preferences：本地偏好设置存储
+
+## 功能描述
+
+### 1. 登录系统
+- 账号密码登录
+- 图形验证码验证
+- 记住账号密码功能（本地加密存储）
+- 登录失败提示
+
+### 2. 报表中心
+- **数据概览**：查看关键指标和总体数据大盘
+- **销售报表**：查看销售相关报表数据
+- **运营报表**：查看运营表现、趋势及细分数据
+- **财务报表**：查看财务相关的收入、支出与成本报表
+
+报表功能包括：
+- 数据列表展示（支持分页）
+- 关键字搜索
+- 按分类筛选
+- 新增/编辑/删除记录
+- 批量删除
+- 导出为 Excel
+
+### 3. 系统设置
+- **权限管理**：查看菜单权限配置与结构
+- **安全策略**：查看安全策略及安全相关配置项
+- **备份恢复**：查看备份计划与恢复相关操作入口
+- **账号管理**：
+  - 账号列表管理
+  - 新增/编辑/删除账号
+  - 账号状态启用/禁用
+  - 头像上传
+  - 角色绑定
+- **角色管理**：
+  - 角色列表管理
+  - 新增/编辑/删除角色
+  - 角色状态启用/禁用
+  - 权限配置
+
+### 4. 开发工具
+- **API 网关**：查看 API 网关配置与可用接口列表
+- **调试**：查看调试工具和相关配置页面
+
+## 使用方法
+
+### 环境要求
+
+- Flutter SDK 3.10.3 或更高版本
+- Dart SDK 3.10.3 或更高版本
+- 适用于 Windows、macOS 或 Linux 的桌面环境
+
+### 安装步骤
+
+1. **克隆项目**
+```bash
+git clone <repository-url>
+cd self_report_center
+```
+
+2. **安装依赖**
+```bash
+flutter pub get
+```
+
+3. **运行应用**
+
+**Windows:**
+```bash
+flutter run -d windows
+```
+
+**macOS:**
+```bash
+flutter run -d macos
+```
+
+**Linux:**
+```bash
+flutter run -d linux
+```
+
+4. **构建发布版本**
+
+**Windows:**
+```bash
+flutter build windows --release
+```
+
+**macOS:**
+```bash
+flutter build macos --release
+```
+
+**Linux:**
+```bash
+flutter build linux --release
+```
+
+### 默认账号
+
+系统首次启动时会自动创建默认超级管理员账号：
+
+- **账号**：`superchenergou`
+- **密码**：`superchenergou`
+
+⚠️ **安全提示**：首次登录后请立即修改默认密码或删除此账号！
+
+### 使用说明
+
+1. **登录**
+   - 输入账号和密码
+   - 输入验证码（区分大小写）
+   - 点击"登录"按钮
+   - 可选择"记住账号和密码"以便下次快速登录
+
+2. **查看报表**
+   - 在左侧菜单选择"报表中心"
+   - 选择具体的报表分类（数据概览、销售报表等）
+   - 使用顶部搜索框进行关键字搜索
+   - 点击"导出"按钮导出当前数据
+
+3. **账号管理**
+   - 在左侧菜单选择"系统设置" -> "账号管理"
+   - 点击"新增"创建新账号
+   - 选中账号后可进行编辑或删除
+   - 可以为账号分配角色
+
+4. **角色管理**
+   - 在左侧菜单选择"系统设置" -> "角色管理"
+   - 创建新角色并配置权限
+   - 角色状态可启用或禁用
+
+## 权限系统
+
+系统使用基于角色的访问控制（RBAC），权限定义如下：
+
+| 权限键 | 权限名称 | 描述 |
+|--------|----------|------|
+| data_overview | 数据概览 | 查看关键指标和总体数据大盘 |
+| sales_report | 销售报表 | 查看与导出销售相关的报表数据 |
+| ops_report | 运营报表 | 查看运营表现、趋势及细分数据 |
+| finance_report | 财务报表 | 查看财务相关的收入、支出与成本报表 |
+| settings_permission | 权限 | 查看菜单权限配置与结构 |
+| settings_security | 安全策略 | 查看安全策略及安全相关配置项 |
+| settings_backup | 备份恢复 | 查看备份计划与恢复相关操作入口 |
+| account_manage | 账号管理 | 查看账号列表、角色绑定和状态 |
+| role_manage | 角色管理 | 查看角色列表以及角色对应的权限集合 |
+| dev_api | API 网关 | 查看 API 网关配置与可用接口列表 |
+| dev_debug | 调试 | 查看调试工具和相关配置页面 |
+
+## 注意事项
+
+### 安全相关
+
+1. **默认账号安全**
+   - 系统默认创建的超级管理员账号仅在开发环境使用
+   - 生产环境部署前必须修改或删除默认账号
+   - 建议创建具有适当权限的专用管理员账号
+
+2. **密码安全**
+   - 所有密码使用 BCrypt 加密存储
+   - 建议定期更换密码
+   - 不要使用弱密码
+
+3. **数据备份**
+   - 数据库文件位于系统应用程序数据目录
+   - 建议定期备份数据库文件
+   - Windows: `%APPDATA%/self_report_center/`
+   - macOS: `~/Library/Application Support/self_report_center/`
+   - Linux: `~/.local/share/self_report_center/`
+
+### 使用限制
+
+1. **平台支持**
+   - 本应用仅支持桌面系统（Windows、macOS、Linux）
+   - 不支持移动端（iOS、Android）
+   - 不支持 Web 浏览器
+
+2. **并发访问**
+   - 本应用为单机版，不支持多用户并发访问
+   - 数据库文件锁定可能导致访问冲突
+
+3. **数据容量**
+   - SQLite 数据库适合中小规模数据
+   - 大量数据可能影响性能
+
+### 开发相关
+
+1. **代码规范**
+   - 遵循 Flutter 官方代码规范
+   - 使用 `flutter analyze` 进行代码检查
+
+2. **测试数据**
+   - 首次运行会自动生成 30 条测试报表数据
+   - 可在代码中修改 `_seedReportsIfEmpty` 方法调整测试数据量
+
+3. **国际化**
+   - 当前仅支持简体中文
+   - 如需支持其他语言，请添加相应的翻译文件
+
+## 项目结构
+
+```
+lib/
+├── main.dart                 # 应用入口
+├── app.dart                  # 应用根组件
+├── constants/
+│   └── menu_keys.dart        # 菜单权限定义
+├── data/
+│   ├── app_database.dart     # 数据库管理
+│   ├── account_model.dart    # 账号数据模型
+│   ├── account_repository.dart # 账号数据仓库
+│   ├── report_model.dart     # 报表数据模型
+│   ├── report_repository.dart # 报表数据仓库
+│   ├── role_model.dart       # 角色数据模型
+│   └── role_repository.dart  # 角色数据仓库
+├── pages/
+│   ├── dashboard_page.dart   # 主页面（仪表板）
+│   └── login_page.dart       # 登录页面
+└── widgets/
+    ├── account_table.dart    # 账号表格组件
+    ├── report_table.dart     # 报表表格组件
+    └── role_table.dart       # 角色表格组件
+```
+
+## 常见问题
+
+### Q: 登录时提示"验证码不正确"怎么办？
+A: 验证码区分大小写，请确保输入的验证码与图片显示的完全一致。如果验证码难以识别，可以点击验证码图片刷新。
+
+### Q: 如何重置管理员密码？
+A: 目前系统没有提供密码重置功能，如需重置密码，请直接修改数据库中的 `passwordHash` 字段，使用新的 BCrypt 哈希值。
+
+### Q: 导出的 Excel 文件保存在哪里？
+A: 导出时会弹出文件保存对话框，您可以选择保存位置。默认建议文件名格式为 `data_overview_时间戳.xlsx`。
+
+### Q: 如何删除测试数据？
+A: 可以通过系统界面逐条删除，或直接删除数据库文件重新启动应用（会重新生成测试数据）。
+
+### Q: 应用无法启动怎么办？
+A: 请检查：
+1. Flutter 环境是否正确安装
+2. 是否安装了所有依赖（运行 `flutter pub get`）
+3. 查看控制台错误信息
+
+## 许可证
+
+本项目仅供学习和参考使用。
+
+## 联系方式
+
+如有问题或建议，请通过以下方式联系：
+- 提交 Issue
+- 发送邮件
+
+---
+
+**最后更新时间**：2026年1月5日
